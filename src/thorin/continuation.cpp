@@ -169,6 +169,7 @@ void Continuation::set_intrinsic() {
     else if (name() == "spawn")          attributes().intrinsic = Intrinsic::Spawn;
     else if (name() == "sync")           attributes().intrinsic = Intrinsic::Sync;
     else if (name() == "vectorize")      attributes().intrinsic = Intrinsic::Vectorize;
+    else if (name() == "sequence")       attributes().intrinsic = Intrinsic::Sequence;
     else if (name() == "pe_info")        attributes().intrinsic = Intrinsic::PeInfo;
     else if (name() == "pipeline")       attributes().intrinsic = Intrinsic::Pipeline;
     else if (name() == "reserve_shared") attributes().intrinsic = Intrinsic::Reserve;

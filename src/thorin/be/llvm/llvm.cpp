@@ -284,6 +284,9 @@ CodeGen::emit_module() {
     for (auto [width, fct, call] : vec_todo_)
         emit_vectorize(width, fct, call);
     vec_todo_.clear();
+    for (const auto& call : seq_todo_)
+        emit_sequence(call);
+    seq_todo_.clear();
 
     rv::lowerIntrinsics(module());
 #endif
@@ -1131,8 +1134,10 @@ Continuation* CodeGen::emit_intrinsic(llvm::IRBuilder<>& irbuilder, Continuation
         case Intrinsic::Sync:        return emit_sync(irbuilder, continuation);
 #if THORIN_ENABLE_RV
         case Intrinsic::Vectorize:   return emit_vectorize_continuation(irbuilder, continuation);
+        case Intrinsic::Sequence:    return emit_sequence_continuation(irbuilder, continuation);
 #else
         case Intrinsic::Vectorize:   throw std::runtime_error("rebuild with RV support");
+        case Intrinsic::Sequence:    throw std::runtime_error("rebuild with RV support");
 #endif
         default: THORIN_UNREACHABLE;
     }
