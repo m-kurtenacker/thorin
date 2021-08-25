@@ -57,21 +57,27 @@ Continuation* CodeGen::emit_sequence_continuation(llvm::IRBuilder<>& irbuilder, 
     const size_t num_kernel_args = continuation->num_args() - SequenceArgs::Num;
 
     // build function signature
-    Array<llvm::Type*> arg_types(num_kernel_args);
+    Array<llvm::Type*> arg_types(num_kernel_args + 1);
+    arg_types[0] = irbuilder.getInt32Ty(); // loop index
     for (size_t i = 0; i < num_kernel_args; ++i) {
         auto type = continuation->arg(i + SequenceArgs::Num)->type();
-        arg_types[i] = convert(type);
+        arg_types[i + 1] = convert(type);
     }
 
     // build iteration loop and wire the calls
-    Array<llvm::Value*> args(num_kernel_args);
+    Array<llvm::Value*> args(num_kernel_args + 1);
+
+    auto lane_id_fn_type = llvm::FunctionType::get(arg_types[0], false);
+    auto lane_id_fn = llvm::cast<llvm::Function>(module().getOrInsertFunction("rv_lane_id", lane_id_fn_type).getCallee()->stripPointerCasts());
+    args[0] = irbuilder.CreateCall(lane_id_fn);
+
     for (size_t i = 0; i < num_kernel_args; ++i) {
         // check target type
         auto arg = continuation->arg(i + SequenceArgs::Num);
         auto llvm_arg = emit(arg);
         if (arg->type()->isa<PtrType>())
-            llvm_arg = irbuilder.CreateBitCast(llvm_arg, arg_types[i]);
-        args[i] = llvm_arg;
+            llvm_arg = irbuilder.CreateBitCast(llvm_arg, arg_types[i + 1]);
+        args[i + 1] = llvm_arg;
     }
 
     auto kernel_func = emit_fun_decl(kernel);
