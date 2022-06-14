@@ -6,6 +6,8 @@
 //#define DUMP_DIV_ANALYSIS
 //#define DUMP_LOOP_ANALYSIS
 
+#define DUMP_BLOCK(block) block->dump(std::numeric_limits<size_t>::max())
+
 namespace thorin {
 
 class DivergenceRecStreamer {
@@ -33,7 +35,7 @@ void DivergenceRecStreamer::run (const Def* def) {
     if (def->no_dep() || !defs.emplace(def).second) return;
 
     for (auto op : def->ops()) { // for now, don't include debug info and type
-        if (auto cont = op->isa_continuation()) {
+        if (auto cont = op->isa_nom<Continuation>()) {
             if (max != 0) {
                 if (conts.push(cont)) --max;
             }
@@ -42,10 +44,12 @@ void DivergenceRecStreamer::run (const Def* def) {
         }
     }
 
-    if (auto cont = def->isa_continuation())
-        s.fmt("{}: {} = {}({, })", cont, cont->type(), cont->callee(), cont->args())
-        .fmt(" < {} >", (div_analysis->getUniform(cont->callee()) == DivergenceAnalysis::State::Uniform)  ? "Uni" : "Div");
-    else if (!def->no_dep() && !def->isa<Param>())
+    if (auto cont = def->isa_nom<Continuation>()) {
+        assert(cont->has_body());
+        s.fmt("{}: {} = {}({, })", cont, cont->type(), cont->body()->callee(), cont->body()->args())
+        .fmt(" < {} >", (div_analysis->getUniform(cont->body()->callee()) == DivergenceAnalysis::State::Uniform)  ? "Uni" : "Div");
+        run(cont->body());
+    } else if (!def->no_dep() && !def->isa<Param>())
         def->stream1(s.fmt("{}: {} = ", def, def->type()))
         .fmt(" < {} >", (div_analysis->getUniform(def) == DivergenceAnalysis::State::Uniform)  ? "Uni" : "Div")
         .endl();
@@ -57,15 +61,23 @@ void DivergenceRecStreamer::run() {
         auto cont = conts.pop();
         s.endl().endl();
 
-        if (!cont->empty()) {
-            s.fmt("{}: {} = {{ ", cont->unique_name(), cont->type());
-            for (size_t i = 0; i < cont->num_params(); i++) {
-                auto param = cont->param(i);
-                s.fmt("[{}:{}]", param, (div_analysis->getUniform(param) == DivergenceAnalysis::State::Uniform)  ? "Uni" : "Div");
+        if (cont->world().is_external(cont))
+            s.fmt("extern ");
+
+        if (cont->has_body()) {
+            s.fmt("{}: {} = (", cont->unique_name(), cont->type());
+
+            for (auto param : cont->params()) {
+                s.fmt(" [{} : {}] ", param->unique_name(), (div_analysis->getUniform(param) == DivergenceAnalysis::State::Uniform)  ? "Uni" : "Div");
             }
+
+            s.fmt(") -> {{");
+
             s.fmt("[pred:{}]", div_analysis->isPredicated[cont] ? "pred" : "no_pred");
+
             s.fmt("\t\n");
-            run(cont);
+
+            run(cont->body());
             s.fmt("\b\n}}");
         } else {
             s.fmt("{}: {} = {{ <unset> }}", cont->unique_name(), cont->type());
@@ -204,7 +216,7 @@ void DivergenceAnalysis::computeLoops() {
 void DivergenceAnalysis::run() {
     computeLoops();
 
-#ifdef DUMP_DIV_ANALYSIS
+#ifdef DUMP_LOOP_ANALYSIS
     DUMP_BLOCK(base);
     std::cerr << "Loops are\n";
     for (auto elem : loopBodies) {
@@ -250,7 +262,7 @@ void DivergenceAnalysis::run() {
                     continue;
                 num_relevant++;
             }
-            if (num_relevant > 1 && cont->callee()->isa<Continuation>() && cont->callee()->as<Continuation>()->is_intrinsic()) {
+            if (num_relevant > 1 && cont->body()->callee()->isa_nom<Continuation>() && cont->body()->callee()->as<Continuation>()->is_intrinsic()) {
                 splitNodes.emplace(cont);
 #ifdef DUMP_DIV_ANALYSIS
                 cont->dump();
@@ -444,7 +456,7 @@ void DivergenceAnalysis::run() {
     for (auto it : relJoins) {
         //Continuation *split = it.first;
         //use split to capture information about the branching condition
-        /*const Continuation * branch_int = split->op(0)->isa_continuation();
+        /*const Continuation * branch_int = split->op(0)->isa_nom<Continuation>();
         const Def * branch_cond;
         if (branch_int && (branch_int->intrinsic() == Intrinsic::Branch || branch_int->intrinsic() == Intrinsic::Match))
             branch_cond = split->op(1);
@@ -502,14 +514,21 @@ void DivergenceAnalysis::run() {
 
             if (old_state == Uniform) {
                 //Communicate Uniformity over continuation parameters
-                Continuation *cont = use.def()->isa_continuation();
-                if (cont) {
+                auto app = use.def()->isa<App>();
+                if (app) {
+#ifdef DUMP_DIV_ANALYSIS
+                    app->dump();
+#endif
+                    auto cont = app->using_continuations()[0];
+                    assert(cont);
 #ifdef DUMP_DIV_ANALYSIS
                     cont->dump();
+                    std::cerr << (relJoins.find(cont) != relJoins.end()) << "\n";
 #endif
+
                     bool is_op = false; //TODO: this is not a good filter for finding continuation calls!
                     int opnum = 0;
-                    for (auto param : cont->ops()) {
+                    for (auto param : app->args()) {
                         if (param == def) {
                             is_op = true;
                             break;
@@ -517,14 +536,16 @@ void DivergenceAnalysis::run() {
                         opnum++;
                     }
 #ifdef DUMP_DIV_ANALYSIS
-                    cont->dump();
                     std::cerr << is_op << "\n";
                     std::cerr << opnum << "\n";
 #endif
-                    auto target = cont->op(0)->isa_continuation();
+
+                    Continuation * target = app->callee()->isa_nom<Continuation>();
 #ifdef DUMP_DIV_ANALYSIS
-                    if (target)
+                    if (target) {
                         target->dump();
+                        std::cerr << target->is_intrinsic() << "\n";
+                    }
 #endif
                     if (is_op && target && target->is_intrinsic() && opnum == 1 && relJoins.find(cont) != relJoins.end()) {
                         ContinuationSet joins = relJoins[cont];
@@ -540,7 +561,7 @@ void DivergenceAnalysis::run() {
                         }
                     } else if (target && is_op) {
                         if (target->is_imported() || (target->is_intrinsic() && target->intrinsic() != Intrinsic::Match && target->intrinsic() != Intrinsic::Branch)) {
-                            auto actualtarget = const_cast<Continuation*>(cont->op(cont->num_ops() - 1)->isa<Continuation>());
+                            auto actualtarget = const_cast<Continuation*>(app->arg(app->num_args() - 1)->isa<Continuation>());
                             assert(actualtarget);
 #ifdef DUMP_DIV_ANALYSIS
                             actualtarget->dump();
@@ -565,9 +586,9 @@ void DivergenceAnalysis::run() {
                                 }
                             }
                         }
-                        for (size_t i = 1; i < cont->num_ops(); ++i) {
-                            auto source_param = cont->op(i);
-                            auto target_param = target->params_as_defs()[i - 1];
+                        for (size_t i = 0; i < app->num_args(); ++i) {
+                            auto source_param = app->arg(i);
+                            auto target_param = target->params_as_defs()[i];
 
                             if (!uniform.contains(source_param))
                                 continue;

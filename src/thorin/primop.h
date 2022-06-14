@@ -8,57 +8,10 @@
 
 namespace thorin {
 
-//------------------------------------------------------------------------------
-
-/// Base class for all @p PrimOp%s.
-class PrimOp : public Def {
-protected:
-    PrimOp(NodeTag tag, const Type* type, Defs args, Debug dbg)
-        : Def(tag, type, args.size(), dbg)
-    {
-        for (size_t i = 0, e = num_ops(); i != e; ++i)
-            set_op(i, args[i]);
-    }
-
-    void set_type(const Type* type) { type_ = type; }
-
-public:
-    const Def* out(size_t i) const;
-    virtual bool has_multiple_outs() const { return false; }
-    virtual const char* op_name() const;
-    virtual const Def* rebuild(World&, const Type*, Defs) const { return nullptr; }
-
-protected:
-    virtual hash_t vhash() const;
-    virtual bool equal(const PrimOp* other) const;
-
-    /// Is @p def the @p i^th result of a @p T @p PrimOp?
-    template<int i, class T> inline static const T* is_out(const Def* def);
-
-private:
-    hash_t hash() const { return hash_ == 0 ? hash_ = vhash() : hash_; }
-
-    mutable uint64_t hash_ = 0;
-
-    friend struct PrimOpHash;
-    friend class World;
-    friend class Cleaner;
-    friend void Def::replace(Tracker) const;
-};
-
-struct PrimOpHash {
-    static hash_t hash(const PrimOp* o) { return o->hash(); }
-    static bool eq(const PrimOp* o1, const PrimOp* o2) { return o1->equal(o2); }
-    static const PrimOp* sentinel() { return (const PrimOp*)(1); }
-};
-
-//------------------------------------------------------------------------------
-
-/// Base class for all @p PrimOp%s without operands.
-class Literal : public PrimOp {
+class Literal : public Def {
 protected:
     Literal(NodeTag tag, const Type* type, Debug dbg)
-        : PrimOp(tag, type, {}, dbg)
+        : Def(tag, type, Defs{}, dbg)
     {}
 };
 
@@ -101,7 +54,7 @@ public:
 
 private:
     hash_t vhash() const override;
-    bool equal(const PrimOp* other) const override;
+    bool equal(const Def*) const override;
     const Def* rebuild(World&, const Type*, Defs) const override;
 
     Box box_;
@@ -124,10 +77,10 @@ template<class T>
 T get(ArrayRef<T> array, const Def* def) { return array[primlit_value<size_t>(def)]; }
 
 /// Akin to <tt>cond ? tval : fval</tt>.
-class Select : public PrimOp {
+class Select : public Def {
 private:
     Select(const Def* cond, const Def* tval, const Def* fval, Debug dbg)
-        : PrimOp(Node_Select, tval->type(), {cond, tval, fval}, dbg)
+        : Def(Node_Select, tval->type(), {cond, tval, fval}, dbg)
     {
         if (!is_type_bool(cond->type())) {
             assert(cond->type()->isa<VectorExtendedType>());
@@ -151,7 +104,7 @@ public:
 };
 
 /// Get the alignment in number of bytes needed for any value (including bottom) of a given @p Type.
-class AlignOf : public PrimOp {
+class AlignOf : public Def {
 private:
     AlignOf(const Def* def, Debug dbg);
 
@@ -164,7 +117,7 @@ public:
 };
 
 /// Get number of bytes needed for any value (including bottom) of a given @p Type.
-class SizeOf : public PrimOp {
+class SizeOf : public Def {
 private:
     SizeOf(const Def* def, Debug dbg);
 
@@ -176,11 +129,11 @@ public:
     friend class World;
 };
 
-/// Base class for all side-effect free binary \p PrimOp%s.
-class BinOp : public PrimOp {
+/// Base class for all side-effect free binary \p Def%s.
+class BinOp : public Def {
 protected:
     BinOp(NodeTag tag, const Type* type, const Def* lhs, const Def* rhs, Debug dbg)
-        : PrimOp(tag, type, {lhs, rhs}, dbg)
+        : Def(tag, type, {lhs, rhs}, dbg)
     {
         assert(lhs->type() == rhs->type() && "types are not equal");
     }
@@ -223,16 +176,16 @@ public:
 };
 
 /// Common mathematical function such as `sin()` or `cos()`.
-class MathOp : public PrimOp {
+class MathOp : public Def {
 private:
     MathOp(MathOpTag tag, const Type* type, Defs args, Debug dbg)
-        : PrimOp((NodeTag)tag, type, args, dbg)
+        : Def((NodeTag)tag, type, args, dbg)
     {}
 
     const Def* rebuild(World&, const Type*, Defs) const override;
 
 public:
-    const PrimType* type() const { return PrimOp::type()->as<PrimType>(); }
+    const PrimType* type() const { return Def::type()->as<PrimType>(); }
     MathOpTag mathop_tag() const { return (MathOpTag) tag(); }
     const char* op_name() const override;
 
@@ -240,10 +193,10 @@ public:
 };
 
 /// Base class for @p Bitcast and @p Cast.
-class ConvOp : public PrimOp {
+class ConvOp : public Def {
 protected:
     ConvOp(NodeTag tag, const Def* from, const Type* to, Debug dbg)
-        : PrimOp(tag, to, {from}, dbg)
+        : Def(tag, to, {from}, dbg)
     {
         assert(!to->isa<VectorExtendedType>() == !from->type()->isa<VectorExtendedType>());
     }
@@ -277,10 +230,10 @@ private:
 };
 
 /// Base class for all aggregate data constructers.
-class Aggregate : public PrimOp {
+class Aggregate : public Def {
 protected:
     Aggregate(NodeTag tag, Defs args, Debug dbg)
-        : PrimOp(tag, nullptr /*set later*/, args, dbg)
+        : Def(tag, nullptr /*set later*/, args, dbg)
     {}
 };
 
@@ -327,13 +280,13 @@ public:
 };
 
 /// Data constructor for a @p VariantType.
-class Variant : public PrimOp {
+class Variant : public Def {
 private:
     Variant(const Type* type, const Def* value, size_t index, Debug dbg);
 
     const Def* rebuild(World&, const Type*, Defs) const override;
     hash_t vhash() const override;
-    bool equal(const PrimOp* other) const override;
+    bool equal(const Def*) const override;
 
     size_t index_;
 
@@ -345,10 +298,10 @@ public:
 };
 
 /// Yields the tag/index for this variant in the supplied integer type
-class VariantIndex : public PrimOp {
+class VariantIndex : public Def {
 private:
     VariantIndex(const Type* int_type, const Def* value, Debug dbg)
-        : PrimOp(Node_VariantIndex, int_type, {value}, dbg)
+        : Def(Node_VariantIndex, int_type, {value}, dbg)
     {
         //assert(value->type()->isa<VariantType>());
         //assert(is_type_s(int_type) || is_type_u(int_type));
@@ -359,10 +312,10 @@ private:
     friend class World;
 };
 
-class VariantExtract : public PrimOp {
+class VariantExtract : public Def {
 private:
     VariantExtract(const Type* type, const Def* value, size_t index, Debug dbg)
-        : PrimOp(Node_VariantExtract, type, {value}, dbg), index_(index)
+        : Def(Node_VariantExtract, type, {value}, dbg), index_(index)
     {
         if (auto vector = value->type()->isa<VectorExtendedType>()) {
             auto inner_type = type->as<VectorType>()->scalarize();
@@ -376,7 +329,7 @@ private:
 
     const Def* rebuild(World&, const Type*, Defs) const override;
     hash_t vhash() const override;
-    bool equal(const PrimOp* other) const override;
+    bool equal(const Def*) const override;
 
     size_t index_;
 
@@ -451,10 +404,10 @@ private:
 };
 
 /// Base class for functional @p Insert and @p Extract.
-class AggOp : public PrimOp {
+class AggOp : public Def {
 protected:
     AggOp(NodeTag tag, const Type* type, Defs args, Debug dbg)
-        : PrimOp(tag, type, args, dbg)
+        : Def(tag, type, args, dbg)
     {}
 
 public:
@@ -505,7 +458,7 @@ public:
  * Then, the address to the <tt>index</tt>'th element is computed.
  * This yields a pointer to that element.
  */
-class LEA : public PrimOp {
+class LEA : public Def {
 private:
     LEA(const Def* ptr, const Def* index, Debug dbg);
 
@@ -514,7 +467,7 @@ private:
 public:
     const Def* ptr() const { return op(0); }
     const Def* index() const { return op(1); }
-    const VectorType* type() const { return PrimOp::type()->as<VectorType>(); }
+    const VectorType* type() const { return Def::type()->as<VectorType>(); }
     const VectorType* ptr_type() const { return ptr()->type()->as<VectorType>(); } ///< Returns the PtrType from @p ptr().
     const Type* ptr_pointee() const; ///< Returns the type referenced by @p ptr().
 
@@ -522,10 +475,10 @@ public:
 };
 
 /// Casts the underlying @p def to a dynamic value during @p partial_evaluation.
-class Hlt : public PrimOp {
+class Hlt : public Def {
 private:
     Hlt(const Def* def, Debug dbg)
-        : PrimOp(Node_Hlt, def->type(), {def}, dbg)
+        : Def(Node_Hlt, def->type(), {def}, dbg)
     {}
 
     const Def* rebuild(World&, const Type*, Defs) const override;
@@ -537,7 +490,7 @@ public:
 };
 
 /// Evaluates to @c true, if @p def is a literal.
-class Known : public PrimOp {
+class Known : public Def {
 private:
     Known(const Def* def, Debug dbg);
 
@@ -551,12 +504,12 @@ public:
 
 /**
  * If a continuation typed def is wrapped in @p Run primop, it will be specialized into a callee whenever it is called.
- * Otherwise, this @p PrimOp evaluates to @p def.
+ * Otherwise, this @p Def evaluates to @p def.
  */
-class Run : public PrimOp {
+class Run : public Def {
 private:
     Run(const Def* def, Debug dbg)
-        : PrimOp(Node_Run, def->type(), {def}, dbg)
+        : Def(Node_Run, def->type(), {def}, dbg)
     {}
 
     const Def* rebuild(World&, const Type*, Defs) const override;
@@ -572,7 +525,7 @@ public:
  * A @p Slot yields a pointer to the given <tt>type</tt>.
  * Loads from this address yield @p Bottom if the frame has already been closed.
  */
-class Slot : public PrimOp {
+class Slot : public Def {
 private:
     Slot(const Type* type, const Def* frame, Debug dbg);
 
@@ -582,7 +535,7 @@ public:
 
 private:
     hash_t vhash() const override;
-    bool equal(const PrimOp* other) const override;
+    bool equal(const Def*) const override;
     const Def* rebuild(World&, const Type*, Defs) const override;
 
     friend class World;
@@ -592,20 +545,20 @@ private:
  * A global variable in the data segment.
  * A @p Global may be mutable or immutable.
  */
-class Global : public PrimOp {
+class Global : public Def {
 private:
     Global(const Def* init, bool is_mutable, Debug dbg);
 
 public:
     const Def* init() const { return op(0); }
     bool is_mutable() const { return is_mutable_; }
-    const PtrType* type() const { return PrimOp::type()->as<PtrType>(); }
+    const PtrType* type() const { return Def::type()->as<PtrType>(); }
     const Type* alloced_type() const { return type()->pointee(); }
     const char* op_name() const override;
 
 private:
     hash_t vhash() const override { return murmur3(gid()); }
-    bool equal(const PrimOp* other) const override { return this == other; }
+    bool equal(const Def* other) const override { return this == other; }
     const Def* rebuild(World&, const Type*, Defs) const override;
 
     bool is_mutable_;
@@ -613,11 +566,11 @@ private:
     friend class World;
 };
 
-/// Base class for all \p PrimOp%s taking and producing side-effects.
-class MemOp : public PrimOp {
+/// Base class for all \p Def%s taking and producing side-effects.
+class MemOp : public Def {
 protected:
     MemOp(NodeTag tag, const Type* type, Defs args, Debug dbg)
-        : PrimOp(tag, type, args, dbg)
+        : Def(tag, type, args, dbg)
     {
         assert(mem()->type()->isa<MemType>());
         assert(args.size() >= 1);
@@ -629,7 +582,7 @@ public:
 
 private:
     hash_t vhash() const override { return murmur3(gid()); }
-    bool equal(const PrimOp* other) const override { return this == other; }
+    bool equal(const Def* other) const override { return this == other; }
 };
 
 /// Allocates memory on the heap.
@@ -644,8 +597,6 @@ public:
     const TupleType* type() const { return MemOp::type()->as<TupleType>(); }
     const PtrType* out_ptr_type() const { return type()->op(1)->as<PtrType>(); }
     const Type* alloced_type() const { return out_ptr_type()->pointee(); }
-    static const Alloc* is_out_mem(const Def* def) { return is_out<0, Alloc>(def); }
-    static const Alloc* is_out_ptr(const Def* def) { return is_out<1, Alloc>(def); }
 
 private:
     const Def* rebuild(World&, const Type*, Defs) const override;
@@ -688,8 +639,6 @@ public:
     const Def* out_val() const { return out(1); }
     const TupleType* type() const { return MemOp::type()->as<TupleType>(); }
     const Type* out_val_type() const { return type()->op(1); }
-    static const Load* is_out_mem(const Def* def) { return is_out<0, Load>(def); }
-    static const Load* is_out_val(const Def* def) { return is_out<1, Load>(def); }
 
 private:
     const Def* rebuild(World&, const Type*, Defs) const override;
@@ -757,8 +706,8 @@ public:
     const TupleType* type() const { return MemOp::type()->as<TupleType>(); }
     bool has_multiple_outs() const override { return true; }
     const Def* out_frame() const { return out(1); }
-    static const Enter* is_out_mem(const Def* def) { return is_out<0, Enter>(def); }
-    static const Enter* is_out_frame(const Def* def) { return is_out<1, Enter>(def); }
+
+    static const Enter* is_out_mem(const Def*);
 
     friend class World;
 };
@@ -808,7 +757,7 @@ inline Assembly::Flags operator&=(Assembly::Flags& lhs, Assembly::Flags rhs) { r
 //------------------------------------------------------------------------------
 
 template<int i, class T>
-const T* PrimOp::is_out(const Def* def) {
+const T* Def::is_out(const Def* def) {
     if (auto extract = def->isa<Extract>()) {
         if (is_primlit(extract->index(), i)) {
             if (auto res = extract->agg()->isa<T>())
@@ -817,17 +766,6 @@ const T* PrimOp::is_out(const Def* def) {
     }
     return nullptr;
 }
-
-//------------------------------------------------------------------------------
-
-template<class To>
-using PrimOpMap     = GIDMap<const PrimOp*, To>;
-using PrimOpSet     = GIDSet<const PrimOp*>;
-using PrimOp2PrimOp = PrimOpMap<const PrimOp*>;
-
-//------------------------------------------------------------------------------
-
-bool is_from_match(const PrimOp*);
 
 //------------------------------------------------------------------------------
 
