@@ -1182,6 +1182,9 @@ llvm::Value* CodeGen::emit_masked_store(llvm::IRBuilder<>& irbuilder, const Mask
 
     auto vectype = masked_store->val()->type()->isa<VectorType>();
     assert(vectype && vectype->is_vector());
+    //TODO: not true with predicated but otherwise uniform stores.
+    //Side note: These should normally not occur, uniform stores in vectorized code indicate undefined behaviour.
+    //Side Side note: unless the mask speciffically only includes one live lane.
 
     auto align = module().getDataLayout().getABITypeAlign(ptr->getType()->getScalarType()->getPointerElementType());
     irbuilder.CreateMaskedScatter(emit(masked_store->val()), ptr, align, mask);

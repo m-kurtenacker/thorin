@@ -248,6 +248,39 @@ const Def * Flatten::flatten_primop(const Def *primop) {
 
             new_primop = return_tuple;
         }
+    } else if (auto masked_load = primop->isa<MaskedLoad>()) {
+        if (newtype->like(masked_load->type()))
+            new_primop = primop->rebuild(world, newtype, nops);
+        else {
+            assert(newtype->isa<TupleType>());
+            auto structtype = newtype->as<TupleType>()->op(1);
+
+            auto addresses = nops[1];
+            auto mem = nops[0];
+            auto mask = nops[2];
+
+            assert(addresses->type()->isa<PtrType>());
+
+            auto pointee_type = addresses->type()->as<PtrType>()->pointee();
+            auto vector_width = addresses->type()->as<PtrType>()->length();
+
+            assert(vector_width > 1);
+            pointee_type = world.vec_type(pointee_type, vector_width);
+
+            std::vector<const Def*> values;
+            for (size_t lane = 0; lane < vector_width; lane++) {
+                //TODO: generate conditional load instead.
+                auto ext = world.extract(addresses, lane);
+                auto load = world.load(mem, ext)->as<Load>();
+                mem = load->out_mem();
+                values.emplace_back(load->out_val());
+            }
+
+            auto returnstruct = world.struct_agg(structtype, values);
+            auto return_tuple = world.tuple({mem, returnstruct});
+
+            new_primop = return_tuple;
+        }
     } else if (primop->isa<VariantIndex>()) {
         auto result_struct = nops[0];
         if (result_struct->type()->isa<StructType>()) {

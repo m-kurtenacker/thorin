@@ -75,6 +75,15 @@ void DivergenceRecStreamer::run() {
 
             s.fmt("[pred:{}]", div_analysis->isPredicated[cont] ? "pred" : "no_pred");
 
+            if (div_analysis->relJoins.contains(cont)) {
+                auto joins = div_analysis->relJoins[cont];
+                s.fmt("[relJoins: ");
+                for (auto join : joins) {
+                    s.fmt("{}, ", join->unique_name());
+                }
+                s.fmt("]");
+            }
+
             s.fmt("\t\n");
 
             run(cont->body());

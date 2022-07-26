@@ -50,6 +50,7 @@ private:
     DivergenceAnalysis * div_analysis_;
 
     GIDMap<Continuation*, ContinuationSet> encloses_splits;
+    GIDMap<Continuation*, GIDMap<Continuation*, ContinuationSet>> split_case_join_cache;
 
     const Def* current_frame;
 
@@ -156,7 +157,7 @@ Continuation* Vectorizer::widen_head(Continuation* old_continuation) {
     return new_continuation;
 }
 
-const Def* Vectorizer::widen(const Def* old_def, const Continuation* context) {
+const Def* Vectorizer::widen(const Def* old_def, const Continuation* context) { //TODO: Check that context is still used correctly.
 #ifdef DUMP_WIDEN
     std::cout << "Widen\n";
     old_def->dump();
@@ -1167,19 +1168,52 @@ void Vectorizer::linearize_match(Continuation * match_old, Continuation * match)
 
     auto variant_index = match->body()->arg(1);
 
+    //TODO: join could still be predicated.
+    //
     //Allocate cache for overwritten objects.
-    size_t cache_size = join->num_params() - 1;
-    assert(is_mem(join->param(0)));
+    //size_t cache_size = join->num_params() - 1;
+    //assert(is_mem(join->param(0)));
 
-    Array<const Def *> join_cache(cache_size);
-    for (size_t i = 0; i < cache_size; i++) {
-        auto t = world_.slot(join->param(i + 1)->type(), current_frame, Debug("join_cache_match"));
-        join_cache[i] = t;
+    long int cache_size = -1;
+
+    for (size_t i = 2; i < match_old->body()->num_args(); i++) {
+        Continuation* case_old = nullptr;
+        if (i == 2)
+            case_old = const_cast<Continuation*>(match_old->body()->arg(i)->as<Continuation>());
+        else
+            case_old = const_cast<Continuation*>(match_old->body()->arg(i)->as<Tuple>()->op(1)->as<Continuation>());
+        auto pred_set = split_case_join_cache[match_old][case_old];
+        for (auto it : pred_set) {
+            assert(cache_size == -1 || cache_size == it->body()->num_args() - 1);
+            cache_size = it->body()->num_args() - 1;
+        }
     }
 
-    //TODO: Larger cases might be possible?
-    assert(encloses_splits[match_old].size() == 0);
+    Array<const Def *> join_cache(cache_size);
 
+    for (size_t i = 2; i < match_old->body()->num_args(); i++) {
+        Continuation* case_old = nullptr;
+        if (i == 2)
+            case_old = const_cast<Continuation*>(match_old->body()->arg(i)->as<Continuation>());
+        else
+            case_old = const_cast<Continuation*>(match_old->body()->arg(i)->as<Tuple>()->op(1)->as<Continuation>());
+        auto pred_set = split_case_join_cache[match_old][case_old];
+        for (auto it : pred_set) {
+            for (size_t j = 0; j < cache_size; j++) {
+                auto t = world_.slot(it->body()->arg(j + 1)->type(), current_frame, Debug("join_cache_match"));
+                join_cache[j] = t;
+            }
+        }
+    }
+
+    /*for (size_t i = 0; i < cache_size; i++) {
+        auto t = world_.slot(join->param(i + 1)->type(), current_frame, Debug("join_cache_match"));
+        join_cache[i] = t;
+    }*/
+
+    //assert(encloses_splits[match_old].size() == 0);
+
+    //Find constants for cases.
     Array<const Def*> split_predicates(match->body()->num_args() - 2);
     for (size_t i = 1; i < match->body()->num_args() - 2; i++) {
         auto elem = match->body()->arg(i + 2);
@@ -1192,6 +1226,8 @@ void Vectorizer::linearize_match(Continuation * match_old, Continuation * match)
         auto pred = world_.cmp(Cmp_eq, variant_index, val_vec);
         split_predicates[i] = pred;
     }
+
+    //Constract "not anything else" case for otherwise.
     split_predicates[0] = split_predicates[1];
     for (size_t i = 2; i < match->body()->num_args() - 2; i++) {
         split_predicates[0] = world_.binop(ArithOp_or, split_predicates[0], split_predicates[i]);
@@ -1201,15 +1237,20 @@ void Vectorizer::linearize_match(Continuation * match_old, Continuation * match)
     Continuation * otherwise = const_cast<Continuation*>(match->body()->arg(2)->as<Continuation>());
     assert(otherwise);
 
-    Continuation * current_case = otherwise;
-
     const Def * otherwise_old = match_old->body()->arg(2);
     Continuation * case_old = const_cast<Continuation*>(otherwise_old->as<Continuation>());
 
+    Continuation * current_case = otherwise;
     Continuation * case_back = world_.continuation(world_.fn_type({world_.mem_type(), vec_mask}), Debug("otherwise_back"));
 
+    std::vector<Continuation*> new_cases;
+
+    for (size_t i = 3; i < match->body()->num_args(); i++) {
+        auto next_case = const_cast<Continuation*>(match->body()->arg(i)->as<Tuple>()->op(1)->as<Continuation>());
+        new_cases.emplace_back(next_case);
+    }
+
     auto new_jump_split = world_.predicated(vec_mask);
-    assert(current_case != case_back);
     { //mem scope
         assert(!split_predicates[0]->isa<Vector>());
         const Def * mem = match->body()->arg(0);
@@ -1225,7 +1266,8 @@ void Vectorizer::linearize_match(Continuation * match_old, Continuation * match)
 
         if (i < match_old->body()->num_args()) {
             next_case_old = const_cast<Continuation*>(match_old->body()->arg(i)->as<Tuple>()->op(1)->as<Continuation>());
-            next_case = const_cast<Continuation*>(def2def_[next_case_old]->as<Continuation>());
+            //next_case = const_cast<Continuation*>(def2def_[next_case_old]->as<Continuation>());
+            next_case = new_cases[i - 3];
             next_case_back = world_.continuation(world_.fn_type({world_.mem_type(), vec_mask}), Debug("case_back"));
         } else {
             next_case = pre_join;
@@ -1237,24 +1279,27 @@ void Vectorizer::linearize_match(Continuation * match_old, Continuation * match)
 
         bool case_back_has_jump = false;
 
-        for (auto pred_old : join_old->preds()) {
-            if (i != 3 || pred_old != match_old) {
-                if (!div_analysis_->dominatedBy[pred_old].contains(const_cast<Continuation*>(case_old)) && pred_old != case_old) {
-                    continue;
-                }
-            }
+        auto pred_set = split_case_join_cache[match_old][case_old];
 
-            auto pred = const_cast<Continuation*>(def2def_[pred_old]->as<Continuation>());
-            assert(pred);
+        //for (auto pred_old : join_old->preds()) {
+        //    if (i != 3 || pred_old != match_old) {
+        //        if (!div_analysis_->dominatedBy[pred_old].contains(const_cast<Continuation*>(case_old)) && pred_old != case_old) {
+        //            continue;
+        //        }
+        //    }
+        //    auto pred = const_cast<Continuation*>(def2def_[pred_old]->as<Continuation>());
+        //    assert(pred);
 
+        for (auto pred : pred_set) {
             const Def * mem = pred->body()->arg(0);
             assert(is_mem(mem));
 
-            if (pred_old != match_old) {
+            if (pred != match) {
                 for (size_t j = 1; j < pred->body()->num_args(); j++) {
                     assert(join_cache[j - 1]);
 
-                    bool predicated = div_analysis_->isPredicated[pred_old];
+                    //bool predicated = div_analysis_->isPredicated[pred_old];
+                    bool predicated = true;
                     if (predicated) {
                         const Def* pred_param = pred->param(1);
                         mem = world_.maskedstore(mem, join_cache[j - 1], pred->body()->arg(j), pred_param);
@@ -1331,6 +1376,80 @@ void Vectorizer::linearize(Continuation * vectorized) {
     std::cerr << "\n";
 #endif
 
+    DUMP_BLOCK(kernel);
+
+    //Build a "split tree" for all nodes.
+    //TODO: Instead of using relJoins, a new domtree should be built.
+    for (auto it : div_analysis_->relJoins) {
+        GIDMap<Continuation*, ContinuationSet> case_join_cache;
+
+        auto split_old = it.first;
+        auto join_old_set = it.second;
+
+        Continuation* split_new = const_cast<Continuation*>(def2def_[split_old]->as<Continuation>());
+        assert(split_new);
+
+        for (auto case_old : split_old->succs()) {
+            if (!case_old->has_body())
+                continue;
+
+            for (auto join_old : join_old_set) {
+                auto join_new = def2def_[join_old];
+                assert(join_new);
+
+                bool join_predicated = div_analysis_->isPredicated[join_old];
+
+                if (case_old == join_old) {
+                    auto case_new = const_cast<Continuation*>(def2def_[case_old]->as<Continuation>());
+                    assert(case_new);
+
+                    if (split_new->body()->callee()->as<Continuation>()->is_intrinsic() && split_new->body()->callee()->as<Continuation>()->intrinsic() == Intrinsic::Match) {
+                        assert(split_old->body()->arg(2) == case_old);
+                        auto otw_new = const_cast<Continuation*>(split_new->body()->arg(2)->as<Continuation>());
+                        assert(otw_new);
+
+                        assert(otw_new->succs()[0] == join_new);
+                        case_join_cache[case_old].emplace(otw_new);
+                    } else {
+                        for (auto succ : split_new->succs()) {
+                            if (!succ->has_body())
+                                continue;
+                            if (succ->body()->callee() == join_new) {
+                                case_join_cache[case_old].emplace(succ);
+                            }
+                            if (succ == join_new) {
+                                case_join_cache[case_old].emplace(case_new);
+                            }
+                        }
+                    }
+                } else {
+                    for (auto pred_old : join_old->preds()) {
+                        if (!div_analysis_->dominatedBy[pred_old].contains(const_cast<Continuation*>(case_old)) && pred_old != case_old)
+                            continue;
+
+                        auto new_pred = const_cast<Continuation*>(def2def_[pred_old]->as<Continuation>());
+                        assert(new_pred);
+
+                        bool pred_predicated = div_analysis_->isPredicated[pred_old];
+                        if ((pred_predicated && !join_predicated) || (pred_old == split_old && !join_predicated)) {
+                            for (auto succ : new_pred->succs()) {
+                                if (!succ->has_body())
+                                    continue;
+                                if (succ->body()->callee() == join_new) {
+                                    case_join_cache[case_old].emplace(succ);
+                                }
+                            }
+                        }
+
+                        if (new_pred->body()->callee() == join_new)
+                            case_join_cache[case_old].emplace(new_pred);
+                    }
+                }
+            }
+        }
+        split_case_join_cache[split_old] = case_join_cache;
+    }
+
     std::queue <Continuation*> split_queue;
     GIDMap<const Continuation*, const Def*> runningVars;
 
@@ -1372,21 +1491,25 @@ void Vectorizer::linearize(Continuation * vectorized) {
                 for (auto encloses : div_analysis_->splitParrents[it.first]) {
                     encloses_splits[encloses].emplace(it.first);
                 }
-            } else {
-#ifdef DUMP_VECTORIZER_LINEARIZER
-                std::cerr << "Found split node: ";
+                std::cerr << "Child split ";
                 it.first->dump();
+            //} else {
+            }
+
+#ifdef DUMP_VECTORIZER_LINEARIZER
+            std::cerr << "Found split node: ";
+            it.first->dump();
 #endif
-                auto cont = it.first->body()->callee()->isa_nom<Continuation>();
-                if (cont && cont->is_intrinsic() && (cont->intrinsic() == Intrinsic::Match || cont->intrinsic() == Intrinsic::Branch)) {
-                    auto new_cont = def2def_[it.first]->as<Continuation>();
-                    assert(new_cont);
-                    if (new_cont->body()->arg(1)->type()->isa<VectorType>() && new_cont->body()->arg(1)->type()->as<VectorType>()->is_vector()) {
-                        split_queue.push(it.first);
-                        done.emplace(it.first);
-                    }
+            auto cont = it.first->body()->callee()->isa_nom<Continuation>();
+            if (cont && cont->is_intrinsic() && (cont->intrinsic() == Intrinsic::Match || cont->intrinsic() == Intrinsic::Branch)) {
+                auto new_cont = def2def_[it.first]->as<Continuation>();
+                assert(new_cont);
+                if (new_cont->body()->arg(1)->type()->isa<VectorType>() && new_cont->body()->arg(1)->type()->as<VectorType>()->is_vector()) {
+                    split_queue.push(it.first);
+                    done.emplace(it.first);
                 }
             }
+            //}
         }
 
         for (auto it : div_analysis_->loopBodies) {
@@ -1408,7 +1531,7 @@ void Vectorizer::linearize(Continuation * vectorized) {
 
     while (!split_queue.empty()) {
         Continuation* latch_old = pop(split_queue);
-        assert (!div_analysis_->splitParrents.contains(latch_old));
+        //assert (!div_analysis_->splitParrents.contains(latch_old));
         Continuation * latch = const_cast<Continuation*>(def2def_[latch_old]->as<Continuation>());
         assert(latch);
 
@@ -1608,14 +1731,19 @@ void Vectorizer::linearize(Continuation * vectorized) {
                     pred->jump(new_jump, { mem, current_running_inner, loop_continue, loop_exit } );
                 }
             }
-        } else if (isLoopExit) //Do nothing, these branches are handled with their respective loop headers.
+        } else if (isLoopExit) { //Do nothing, these branches are handled with their respective loop headers.
             assert(cont->intrinsic() == Intrinsic::Branch || cont->intrinsic() == Intrinsic::Predicated);
-        else if (cont && cont->is_intrinsic() && cont->intrinsic() == Intrinsic::Match && latch->body()->arg(1)->type()->isa<VectorType>() && latch->body()->arg(1)->type()->as<VectorType>()->is_vector())
+        } else if (cont && cont->is_intrinsic() && cont->intrinsic() == Intrinsic::Match && latch->body()->arg(1)->type()->isa<VectorType>() && latch->body()->arg(1)->type()->as<VectorType>()->is_vector()) {
             linearize_match(latch_old, latch);
-        else if (cont && cont->is_intrinsic() && cont->intrinsic() == Intrinsic::Branch && latch->body()->arg(1)->type()->isa<VectorType>() && latch->body()->arg(1)->type()->as<VectorType>()->is_vector())
+        } else if (cont && cont->is_intrinsic() && cont->intrinsic() == Intrinsic::Branch && latch->body()->arg(1)->type()->isa<VectorType>() && latch->body()->arg(1)->type()->as<VectorType>()->is_vector()) {
+            if (div_analysis_->splitParrents.contains(latch_old))
+                continue;
             linearize_branch(latch_old, latch);
-        else
+        } else {
+            if (div_analysis_->splitParrents.contains(latch_old))
+                continue;
             THORIN_UNREACHABLE;
+        }
 
 #ifdef DUMP_VECTORIZER_LINEARIZER
         DUMP_BLOCK(vectorized);
