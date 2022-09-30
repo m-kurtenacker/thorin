@@ -19,6 +19,10 @@ const Def* Importer::import(const Def* odef) {
     if (odef->isa_nom()) {
         stub = odef->stub(world(), ntype);
         def_old2new_[odef] = stub;
+
+        if (auto ocont = odef->isa_nom<Continuation>())
+            if (ocont->attributes().depends)
+                stub->as_nom<Continuation>()->attributes().depends = import(ocont->attributes().depends)->as<Continuation>();
     }
 
     size_t size = odef->num_ops();
