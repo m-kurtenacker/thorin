@@ -1,0 +1,21 @@
+name: Doxygen
+
+on: [ push ]
+
+jobs:
+  doxygen:
+    name: Build Doxygen
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        repository: AnyDSL/anydsl
+        path: anydsl
+    - uses: actions/checkout@v2
+      with:
+        repository: AnyDSL/thorin
+        path: anydsl/thorin
+    - uses: mattnotmitt/doxygen-action@1.9.4
+      with:
+        working-directory: anydsl/thorin
+        doxyfile-path: './doxyfile'
