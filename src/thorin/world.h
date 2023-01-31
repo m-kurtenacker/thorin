@@ -402,10 +402,14 @@ public:
     void cleanup();
     void opt();
 
+    bool register_plugin(std::string plugin_name);
+    void * search_plugin_function(std::string function_name);
+
     bool ensure_stack_size(size_t new_size);
 
 private:
     std::unique_ptr<World> world_;
+    std::vector<void*> plugin_handles;
 };
 
 }
