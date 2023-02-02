@@ -37,6 +37,10 @@
 #define THORIN_BREAK { int* __p__ = nullptr; *__p__ = 42; }
 #endif
 
+#ifdef THORIN_HAS_RLIMITS
+#include <sys/resource.h>
+#endif
+
 namespace thorin {
 
 /*
@@ -1308,6 +1312,26 @@ void Thorin::opt() {
     RUN_PASS(dead_load_opt(world()))
     RUN_PASS(cleanup())
     RUN_PASS(codegen_prepare(world()))
+}
+
+void Thorin::ensure_stack_size(size_t size) {
+#ifdef THORIN_HAS_RLIMITS
+    struct rlimit rlim;
+    if (getrlimit(RLIMIT_STACK, &rlim) != 0) {
+        world().ELOG("Failed to get current stack size\n");
+        return;
+    }
+
+    if (rlim.rlim_cur != RLIM_INFINITY && rlim.rlim_cur < rlim_t(size)) {
+        world().VLOG("Increase stack size from {} to {}\n", rlim.rlim_cur, size);
+        rlim.rlim_cur = rlim_t(size);
+
+        if (setrlimit(RLIMIT_STACK, &rlim) != 0)
+            world().ELOG("Failed to set stack size\n");
+    }
+#else
+    world().ILOG("Attempted to set stack size on an unsupported platform\n");
+#endif
 }
 
 }

@@ -25,6 +25,9 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules")
 find_package(Half REQUIRED)
 message(STATUS "Building with Half library from ${Half_INCLUDE_DIRS}.")
 
+include(CheckIncludeFile)
+check_include_file(sys/resource.h THORIN_HAS_RLIMITS)
+
 # find json package for json output support.
 find_package(nlohmann_json 3.2.0)
 if(nlohmann_json_FOUND)
