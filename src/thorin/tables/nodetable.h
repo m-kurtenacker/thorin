@@ -34,6 +34,7 @@
         THORIN_NODE(VariantIndex, variant_index)
         THORIN_NODE(VariantExtract, variant_extract)
         THORIN_NODE(StructAgg, struct_agg)
+        THORIN_NODE(VectorLift, vector_lift)
         THORIN_NODE(Vector, vector)
         THORIN_NODE(Closure, closure)
         THORIN_NODE(Extract, extract)

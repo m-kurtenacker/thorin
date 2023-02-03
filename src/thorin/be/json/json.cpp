@@ -424,6 +424,18 @@ public:
             result["type"] = "struct";
             result["args"] = args;
             result["struct_type"] = struct_type;
+        } else if (auto vector_lift = def->isa<VectorLift>()) {
+            json args = json::array();
+            for (auto arg : vector_lift->ops()) {
+                args.push_back(translate_def(arg));
+            }
+            auto vector_type = type_table_.translate_type(vector_lift->type());
+            auto name = "_" + std::to_string(def_table.size());
+
+            result["name"] = name;
+            result["type"] = "vector_lift";
+            result["args"] = args;
+            result["vector_type"] = vector_type;
         } else if (auto tuple = def->isa<Tuple>()) {
             json args = json::array();
             for (auto arg : tuple->ops()) {

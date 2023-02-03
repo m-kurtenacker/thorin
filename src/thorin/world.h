@@ -181,6 +181,9 @@ public:
     const Def* struct_agg(const StructType* struct_type, Defs args, Debug dbg = {}) {
         return try_fold_aggregate(cse(new StructAgg(*this, struct_type, args, dbg)));
     }
+    const Def* vector_lift(const VectorContainerType* container_type, const Def* element, Debug dbg = {}) {
+        return cse(new VectorLift(*this, container_type, element, dbg));
+    }
     const Def* tuple(Defs args, Debug dbg = {}) { return args.size() == 1 ? args.front() : try_fold_aggregate(cse(new Tuple(*this, args, dbg))); }
 
     const Def* variant(const VariantType* variant_type, const Def* value, size_t index, Debug dbg = {}) { return cse(new Variant(*this, variant_type, value, index, dbg)); }

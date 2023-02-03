@@ -368,6 +368,22 @@ public:
     friend class World;
 };
 
+class VectorLift : public Aggregate {
+private:
+    VectorLift(World& world, const VectorContainerType* container_type, const Def* element, Debug dbg)
+        : Aggregate(world, Node_VectorLift, {element}, dbg)
+    {
+        set_type(container_type);
+    }
+
+    const Def* rebuild(World&, const Type*, Defs) const override;
+
+public:
+    const VectorContainerType* type() const { return Aggregate::type()->as<VectorContainerType>(); }
+
+    friend class World;
+};
+
 /// Data constructor for a @p VectorType.
 class Vector : public Aggregate {
 private:
