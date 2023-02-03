@@ -217,6 +217,8 @@ Stream& Type::stream(Stream& s) const {
 
         if (t->is_vector()) s.fmt(">");
         return s;
+    } else if (auto t = isa<VectorContainerType>()) {
+        return s.fmt("<{} x {}>", t->length(), t->element());
     }
     THORIN_UNREACHABLE;
 }

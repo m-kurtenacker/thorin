@@ -266,6 +266,22 @@ inline bool is_thin(const Type* type) {
     return type->isa<PrimType>() || type->isa<PtrType>() || is_type_unit(type);
 }
 
+/// Vector container type.
+class VectorContainerType : public VectorType {
+private:
+    VectorContainerType(World& world, const Type* element, size_t length, Debug dbg)
+        : VectorType(world, Node_VectorContainerType, {element}, length, dbg)
+    {}
+
+public:
+    const Type* element() const { return op(0)->as<Type>(); }
+
+private:
+    const Type* rebuild(World&, const Type*, Defs) const override;
+
+    friend class World;
+};
+
 class FnType : public Type, public TypeOpsMixin<TupleType> {
 protected:
     FnType(World& world, Defs ops, NodeTag tag, Debug dbg)

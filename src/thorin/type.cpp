@@ -59,6 +59,7 @@ const Type* IndefiniteArrayType::rebuild(World& w, const Type* t, Defs o) const 
 const Type* MemType            ::rebuild(World& w, const Type* t, Defs o) const { return w.mem_type(); }
 const Type* PrimType           ::rebuild(World& w, const Type* t, Defs o) const { return w.prim_type(primtype_tag(), length()); }
 const Type* PtrType            ::rebuild(World& w, const Type* t, Defs o) const { return w.ptr_type(o[0]->as<Type>(), length(), device(), addr_space()); }
+const Type* VectorContainerType::rebuild(World& w, const Type* t, Defs o) const { return w.vector_container_type(o[0]->as<Type>(), length()); }
 const Type* TupleType          ::rebuild(World& w, const Type* t, Defs o) const { return w.tuple_type(defs2types(o)); }
 
 /*
@@ -80,6 +81,9 @@ VariantType* VariantType::stub(World& world, const Type*) const {
 //------------------------------------------------------------------------------
 
 const VectorType* VectorType::scalarize() const {
+    if (auto vec = isa<VectorContainerType>())
+        /*By design, the element of a container is not a vectortype.*/
+        THORIN_UNREACHABLE;
     if (auto ptr = isa<PtrType>())
         return world().ptr_type(ptr->pointee());
     return world().prim_type(as<PrimType>()->primtype_tag());
@@ -164,6 +168,10 @@ const PrimType* World::prim_type(PrimTypeTag tag, size_t length) {
 
 const PtrType* World::ptr_type(const Type* pointee, size_t length, int32_t device, AddrSpace addr_space) {
     return make<PtrType>(*this, pointee, length, device, addr_space, Debug());
+}
+
+const VectorContainerType* World::vector_container_type(const Type* element, size_t length) {
+    return make<VectorContainerType>(*this, element, length, Debug());
 }
 
 const FnType*              World::fn_type(Types args) { return make<FnType>(*this, types2defs(args), Node_FnType, Debug()); }

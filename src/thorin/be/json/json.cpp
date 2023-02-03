@@ -156,6 +156,13 @@ public:
                 result["addrspace"] = "private";
                 break;
             }
+        } else if (auto vectortype = type->isa<VectorContainerType>()) {
+            auto element_type = translate_type(vectortype->element());
+
+            result["type"] = "vector_container";
+            result["args"] = { element_type };
+            result["name"] = element_type + "_vec_" + std::to_string(type_table.size());
+            result["length"] = vectortype->length();
         } else {
             std::cerr << "type cannot be translated\n";
             type->dump();

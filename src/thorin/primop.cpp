@@ -287,7 +287,22 @@ const Type* Extract::extracted_type(const Def* agg, const Def* index) {
         return get(tuple->types(), index);
     else if (auto array = agg->type()->isa<ArrayType>())
         return array->elem_type();
-    else if (auto vector = agg->type()->isa<VectorType>())
+    else if (auto vector = agg->type()->isa<VectorContainerType>()) {
+        assert(index->isa<Tuple>());
+        auto lit = index->op(0)->isa<PrimLit>();
+        assert(lit);
+        if (primlit_value<u64>(lit) == 0)
+            return vector->element();
+        else if (primlit_value<u64>(lit) == 1) {
+            auto inner_type = extracted_type(agg->world().bottom(vector->element()), index->op(1));
+            if (auto ptr = inner_type->isa<PtrType>())
+                return agg->world().ptr_type(ptr->pointee(), vector->length());
+            else if (auto prim_type = inner_type->isa<PrimType>())
+                return agg->world().prim_type(prim_type->primtype_tag(), vector->length());
+            else
+                return agg->world().vector_container_type(inner_type, vector->length());
+        }
+    } else if (auto vector = agg->type()->isa<VectorType>())
         return vector->scalarize();
     else if (auto struct_type = agg->type()->isa<StructType>())
         return get(struct_type->types(), index);

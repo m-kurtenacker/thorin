@@ -668,6 +668,7 @@ static bool fold_1_tuple(const Type* type, const Def* index) {
         if (primlit_value<u64>(lit) == 0
                 && !type->isa<ArrayType>()
                 && !type->isa<StructType>()
+                && !type->isa<VectorContainerType>()
                 && !type->isa<TupleType>()) {
             if (auto prim_type = type->isa<PrimType>())
                 return prim_type->length() == 1;

@@ -112,6 +112,7 @@ public:
     const MemType* mem_type() { return make<MemType>(*this, Debug()); }
     const FrameType* frame_type() { return make<FrameType>(*this, Debug()); }
     const PtrType* ptr_type(const Type* pointee, size_t length = 1, int32_t device = -1, AddrSpace addr_space = AddrSpace::Generic);
+    const VectorContainerType* vector_container_type(const Type* element, size_t length = 1);
     const FnType* fn_type() { return fn_type({}); } ///< Returns an empty @p FnType.
     const FnType* fn_type(Types args);
     const ClosureType* closure_type(Types args);
