@@ -29,9 +29,13 @@ include(CheckIncludeFile)
 check_include_file(sys/resource.h THORIN_HAS_RLIMITS)
 
 # find json package for json output support.
-find_package(nlohmann_json 3.2.0)
-if(nlohmann_json_FOUND)
+if(TARGET nlohmann_json)
     set(THORIN_ENABLE_JSON TRUE)
+else()
+    find_package(nlohmann_json 3.2.0 QUIET)
+    if(nlohmann_json_FOUND)
+        set(THORIN_ENABLE_JSON TRUE)
+    endif()
 endif()
 
 # check for possible llvm extension
