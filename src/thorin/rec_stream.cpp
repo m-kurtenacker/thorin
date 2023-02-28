@@ -219,6 +219,8 @@ Stream& Type::stream(Stream& s) const {
         return s;
     } else if (auto t = isa<VectorContainerType>()) {
         return s.fmt("<{} x {}>", t->length(), t->element());
+    } else if (isa<Star>()) {
+        return s.fmt("★");
     }
     THORIN_UNREACHABLE;
 }
