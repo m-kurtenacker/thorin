@@ -69,7 +69,7 @@ LEA::LEA(World& world, const Def* ptr, const Def* index, Debug dbg)
     if (auto tuple = ptr_pointee()->isa<TupleType>()) {
         set_type(world.ptr_type(get(tuple->types(), index), type->length(), type->device(), type->addr_space()));
     } else if (auto array = ptr_pointee()->isa<ArrayType>()) {
-        set_type(world.ptr_type(array->elem_type(), type->length(), type->device(), type->addr_space()));
+        set_type(world.ptr_type(array->elem_type(), type->length() * index->type()->as<VectorType>()->length(), type->device(), type->addr_space()));
     } else if (auto struct_type = ptr_pointee()->isa<StructType>()) {
         set_type(world.ptr_type(get(struct_type->types(), index), type->length(), type->device(), type->addr_space()));
     } else if (auto prim_type = ptr_pointee()->isa<PrimType>()) {
@@ -114,7 +114,10 @@ Alloc::Alloc(World& world, const Type* type, const Def* mem, const Def* extra, D
 Load::Load(World& world, const Def* mem, const Def* ptr, Debug dbg)
     : Access(world, Node_Load, nullptr, {mem, ptr}, dbg)
 {
-    set_type(world.tuple_type({world.mem_type(), ptr->type()->as<PtrType>()->pointee()}));
+    auto inner_type = ptr->type()->as<PtrType>()->pointee();
+    if (ptr->type()->as<PtrType>()->is_vector())
+        inner_type = world.vec_type(inner_type, ptr->type()->as<PtrType>()->length());
+    set_type(world.tuple_type({world.mem_type(), inner_type}));
 }
 
 Enter::Enter(World& world, const Def* mem, Debug dbg)

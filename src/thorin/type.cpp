@@ -170,6 +170,15 @@ const PtrType* World::ptr_type(const Type* pointee, size_t length, int32_t devic
     return make<PtrType>(*this, pointee, length, device, addr_space, Debug());
 }
 
+const VectorType* World::vec_type(const Type* element, size_t length) {
+    if (auto elem_prim_type = element->isa<PrimType>()) {
+        return prim_type(elem_prim_type->primtype_tag(), length * elem_prim_type->length());
+    } else if (auto elem_ptr_type = element->isa<PtrType>()) {
+        return ptr_type(elem_ptr_type->pointee(), length * elem_ptr_type->length());
+    }
+    return vector_container_type(element, length);
+}
+
 const VectorContainerType* World::vector_container_type(const Type* element, size_t length) {
     return make<VectorContainerType>(*this, element, length, Debug());
 }

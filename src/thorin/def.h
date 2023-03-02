@@ -99,6 +99,11 @@ using DefMap  = GIDMap<const Def*, To>;
 using DefSet  = GIDSet<const Def*>;
 using Def2Def = DefMap<const Def*>;
 
+template<class To>
+using TypeMap  = GIDMap<const Type*, To>;
+using TypeSet  = GIDSet<const Type*>;
+using Type2Type = DefMap<const Type*>;
+
 //------------------------------------------------------------------------------
 
 namespace Dep {
