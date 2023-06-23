@@ -596,6 +596,15 @@ public:
             result["type"] = "alloc";
             result["args"] = args;
             result["target_type"] = target_type;
+        } else if (auto release = def->isa<Release>()) {
+            json args = json::array();
+            args.push_back(translate_def(release->mem()));
+            args.push_back(translate_def(release->alloc()));
+            auto name = "_" + std::to_string(def_table.size());
+
+            result["name"] = name;
+            result["type"] = "release";
+            result["args"] = args;
         } else if (auto global = def->isa<Global>()) {
             auto init = translate_def(global->init());
             bool is_mutable = global->is_mutable();
