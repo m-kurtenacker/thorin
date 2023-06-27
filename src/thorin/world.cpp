@@ -10,8 +10,12 @@
 #endif
 
 #include <cmath>
+#ifdef _MSC_VER
+#include <windows.h>
+#else
 #include <execinfo.h>
 #include <dlfcn.h>
+#endif
 
 #ifdef THORIN_ENABLE_RLIMITS
 #include <sys/resource.h>
@@ -1332,6 +1336,9 @@ void Thorin::opt() {
 }
 
 bool Thorin::register_plugin(std::string plugin_name) {
+#ifdef _MSC_VER
+    return false;
+#else // _MSC_VER
     void *handle = dlopen(plugin_name.c_str(), RTLD_LAZY | RTLD_GLOBAL);
     if (!handle) {
         world().ELOG("Error loading plugin {}: {}", plugin_name, dlerror());
@@ -1351,14 +1358,18 @@ bool Thorin::register_plugin(std::string plugin_name) {
 
     plugin_handles.push_back(handle);
     return true;
+#endif // _MSC_VER
 }
 
 void * Thorin::search_plugin_function(std::string function_name) {
+#ifdef _MSC_VER
+#else // _MSC_VER
     for (auto plugin : plugin_handles) {
         if (void * plugin_function = dlsym(plugin, function_name.c_str())) {
             return plugin_function;
         }
     }
+#endif // _MSC_VER
     return nullptr;
 }
 
