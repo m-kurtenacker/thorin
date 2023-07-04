@@ -1335,11 +1335,11 @@ void Thorin::opt() {
     RUN_PASS(codegen_prepare(world()))
 }
 
-bool Thorin::register_plugin(std::string plugin_name) {
+bool Thorin::register_plugin(const char* plugin_name) {
 #ifdef _MSC_VER
     return false;
 #else // _MSC_VER
-    void *handle = dlopen(plugin_name.c_str(), RTLD_LAZY | RTLD_GLOBAL);
+    void *handle = dlopen(plugin_name, RTLD_LAZY | RTLD_GLOBAL);
     if (!handle) {
         world().ELOG("Error loading plugin {}: {}", plugin_name, dlerror());
         world().ELOG("Is plugin contained in LD_LIBRARY_PATH?");
@@ -1347,13 +1347,12 @@ bool Thorin::register_plugin(std::string plugin_name) {
     }
     dlerror();
 
-    void (*initfunc)(void);
     char *error;
-    initfunc = (void(*)())(dlsym(handle, "init"));
+    auto initfunc = reinterpret_cast<plugin_init_func_t*>(dlsym(handle, "init"));
     if ((error = dlerror()) != NULL) {
         world().ILOG("Plugin {} did not supply an init function", plugin_name);
     } else {
-        initfunc();
+        initfunc(&world());
     }
 
     plugin_handles.push_back(handle);
@@ -1361,12 +1360,12 @@ bool Thorin::register_plugin(std::string plugin_name) {
 #endif // _MSC_VER
 }
 
-void * Thorin::search_plugin_function(std::string function_name) {
+Thorin::plugin_func_t* Thorin::search_plugin_function(const char* function_name) const {
 #ifdef _MSC_VER
 #else // _MSC_VER
     for (auto plugin : plugin_handles) {
-        if (void * plugin_function = dlsym(plugin, function_name.c_str())) {
-            return plugin_function;
+        if (void* plugin_function = dlsym(plugin, function_name)) {
+            return reinterpret_cast<plugin_func_t*>(plugin_function);
         }
     }
 #endif // _MSC_VER

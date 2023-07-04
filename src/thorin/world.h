@@ -403,8 +403,13 @@ public:
     void cleanup();
     void opt();
 
-    bool register_plugin(std::string plugin_name);
-    void * search_plugin_function(std::string function_name);
+    // plugins
+
+    using plugin_init_func_t = void(World*);
+    using plugin_func_t = void*(World*, const App*);
+
+    bool register_plugin(const char* plugin_name);
+    plugin_func_t* search_plugin_function(const char* function_name) const;
 
     bool ensure_stack_size(size_t new_size);
 
