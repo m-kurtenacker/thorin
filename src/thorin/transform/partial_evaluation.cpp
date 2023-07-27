@@ -146,7 +146,9 @@ void PartialEvaluator::eat_pe_info(Continuation* cur) {
 bool PartialEvaluator::run() {
     bool todo = false;
 
-    for (auto&& [_, cont] : world().externals()) {
+    for (auto&& [_, def] : world().externals()) {
+        auto cont = def->isa<Continuation>();
+        if (!cont) continue;
         if (!cont->has_body()) continue;
         enqueue(cont);
         top_level_[cont] = true;
@@ -197,6 +199,16 @@ bool PartialEvaluator::run() {
                     }
 
                     jump_to_dropped_call(continuation, target, specialize);
+
+                    while (callee && callee->never_called()) {
+                        if (callee->has_body()) {
+                            auto new_callee = const_cast<Continuation*>(callee->body()->callee()->isa<Continuation>());
+                            callee->destroy("partial_evaluation");
+                            callee = new_callee;
+                        } else {
+                            callee = nullptr;
+                        }
+                    }
 
                     if (lower2cff_ && fold) {
                         // re-examine next iteration:

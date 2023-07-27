@@ -5,6 +5,9 @@
 #include "thorin/world.h"
 #include "thorin/analyses/scope.h"
 
+#include<queue>
+#include<utility>
+
 namespace thorin {
 
 const Def* Rewriter::instantiate(const Def* odef) {
@@ -54,6 +57,8 @@ Mangler::Mangler(const Scope& scope, Defs args, Defs lift)
     }
 }
 
+std::queue<std::pair<Continuation*, const Continuation*>> bodies_to_mangle;
+
 Continuation* Mangler::mangle() {
     // create new_entry - but first collect and specialize all param types
     std::vector<const Type*> param_types;
@@ -97,7 +102,17 @@ Continuation* Mangler::mangle() {
         new_entry()->set_filter(world().filter(new_conditions, old_entry()->filter()->debug()));
     }
 
-    new_entry()->set_body(mangle_body(old_entry()->body()));
+    bodies_to_mangle.push(std::pair(new_entry(), old_entry()));
+
+    while (!bodies_to_mangle.empty()) {
+        auto task = pop(bodies_to_mangle);
+
+        auto new_cont = task.first;
+        auto old_cont = task.second;
+
+        assert(!new_cont->has_body());
+        new_cont->set_body(mangle_body(old_cont->body()));
+    }
 
     new_entry()->verify();
 
@@ -107,7 +122,8 @@ Continuation* Mangler::mangle() {
 Continuation* Mangler::mangle_head(Continuation* old_continuation) {
     assert(!def2def_.contains(old_continuation));
     assert(old_continuation->has_body());
-    Continuation* new_continuation = old_continuation->stub();
+    Rewriter rewriter{def2def_};
+    Continuation* new_continuation = old_continuation->stub(rewriter);
     def2def_[old_continuation] = new_continuation;
 
     for (size_t i = 0, e = old_continuation->num_params(); i != e; ++i)
@@ -155,7 +171,7 @@ const Def* Mangler::mangle(const Def* old_def) {
     else if (auto old_continuation = old_def->isa_nom<Continuation>()) {
         auto new_continuation = mangle_head(old_continuation);
         if (old_continuation->has_body())
-            new_continuation->set_body(mangle_body(old_continuation->body()));
+            bodies_to_mangle.push(std::pair(new_continuation, old_continuation));
         return new_continuation;
     } else if (auto param = old_def->isa<Param>()) {
         assert(within(param->continuation()));

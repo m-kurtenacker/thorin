@@ -302,6 +302,12 @@ CodeGen::emit_module() {
         dicompile_unit_ = dibuilder_.createCompileUnit(llvm::dwarf::DW_LANG_C, dibuilder_.createFile(world().name(), llvm::StringRef()), "Impala", opt() > 0, llvm::StringRef(), 0);
     }
 
+    for (auto&& [_, def] : world().externals()) {
+        if (auto global = def->isa<Global>()) {
+            emit(global);
+        }
+    }
+
     Scope::for_each(world(), [&] (const Scope& scope) { emit_scope(scope); });
 
     if (debug()) dibuilder_.finalize();
@@ -466,15 +472,21 @@ void CodeGen::emit_epilogue(Continuation* continuation) {
                 irbuilder.CreateRet(agg);
         }
     } else if (body->callee() == world().branch()) {
-        auto cond = emit(body->arg(0));
-        auto tbb = cont2bb(body->arg(1)->as_nom<Continuation>());
-        auto fbb = cont2bb(body->arg(2)->as_nom<Continuation>());
+        auto mem = body->arg(0);
+        emit_unsafe(mem);
+
+        auto cond = emit(body->arg(1));
+        auto tbb = cont2bb(body->arg(2)->as_nom<Continuation>());
+        auto fbb = cont2bb(body->arg(3)->as_nom<Continuation>());
         irbuilder.CreateCondBr(cond, tbb, fbb);
     } else if (body->callee()->isa<Continuation>() && body->callee()->as<Continuation>()->intrinsic() == Intrinsic::Match) {
-        auto val = emit(body->arg(0));
-        auto otherwise_bb = cont2bb(body->arg(1)->as_nom<Continuation>());
-        auto match = irbuilder.CreateSwitch(val, otherwise_bb, body->num_args() - 2);
-        for (size_t i = 2; i < body->num_args(); i++) {
+        auto mem = body->arg(0);
+        emit_unsafe(mem);
+
+        auto val = emit(body->arg(1));
+        auto otherwise_bb = cont2bb(body->arg(2)->as_nom<Continuation>());
+        auto match = irbuilder.CreateSwitch(val, otherwise_bb, body->num_args() - 3);
+        for (size_t i = 3; i < body->num_args(); i++) {
             auto arg = body->arg(i)->as<Tuple>();
             auto case_const = llvm::cast<llvm::ConstantInt>(emit(arg->op(0)));
             auto case_bb    = cont2bb(arg->op(1)->as_nom<Continuation>());
@@ -565,9 +577,17 @@ void CodeGen::emit_epilogue(Continuation* continuation) {
     irbuilder.SetInsertPoint(bb->getTerminator());
 }
 
+llvm::Value* CodeGen::emit_constant(const Def* def) {
+    auto irbuilder = llvm::IRBuilder(context());
+    return emit_builder(irbuilder, def);
+}
+
 llvm::Value* CodeGen::emit_bb(BB& bb, const Def* def) {
     auto& irbuilder = *bb.second;
+    return emit_builder(irbuilder, def);
+}
 
+llvm::Value* CodeGen::emit_builder(llvm::IRBuilder<>& irbuilder, const Def* def) {
     // TODO
     //if (debug())
         //irbuilder.SetCurrentDebugLocation(llvm::DILocation::get(discope_->getContext(), def->loc().begin.row, def->loc().begin.col, discope_));
@@ -760,6 +780,25 @@ llvm::Value* CodeGen::emit_bb(BB& bb, const Def* def) {
         assert(def->isa<Tuple>() || def->isa<StructAgg>() || def->isa<Vector>() || def->isa<Closure>());
         if (is_unit(agg)) return nullptr;
 
+        if (def->isa<StructAgg>() || def->isa<Vector>()) {
+            // Try to emit it as a constant first
+            Array<llvm::Constant*> consts(agg->num_ops());
+            bool all_consts = true;
+            for (size_t i = 0, n = consts.size(); i != n; ++i) {
+                consts[i] = llvm::dyn_cast<llvm::Constant>(emit(agg->op(i)));
+                if (!consts[i]) {
+                    all_consts = false;
+                    break;
+                }
+            }
+            if (all_consts) {
+                if (def->isa<StructAgg>())
+                    return llvm::ConstantStruct::get(llvm::cast<llvm::StructType>(convert(agg->type())), llvm_ref(consts));
+                else
+                    return llvm::ConstantVector::get(llvm_ref(consts));
+            }
+        }
+
         llvm::Value* llvm_agg = llvm::UndefValue::get(convert(agg->type()));
         if (def->isa<Vector>()) {
             for (size_t i = 0, e = agg->num_ops(); i != e; ++i)
@@ -867,6 +906,11 @@ llvm::Value* CodeGen::emit_bb(BB& bb, const Def* def) {
     } else if (auto variant_ctor = def->isa<Variant>()) {
         auto llvm_type = convert(variant_ctor->type());
         auto tag_value = irbuilder.getIntN(llvm_type->getStructElementType(1)->getScalarSizeInBits(), variant_ctor->index());
+
+        //Unit type variants can be emitted as constants.
+        if (is_type_unit(variant_ctor->op(0)->type())) {
+            return llvm::ConstantStruct::get(llvm::cast<llvm::StructType>(llvm_type), {llvm::UndefValue::get(llvm_type->getStructElementType(0)), tag_value});
+        }
 
         return create_tmp_alloca(irbuilder, llvm_type, [&] (llvm::AllocaInst* alloca) {
             auto tag_addr = irbuilder.CreateInBoundsGEP(llvm_type, alloca, { irbuilder.getInt32(0), irbuilder.getInt32(1) });
@@ -982,13 +1026,23 @@ llvm::Value* CodeGen::emit_global(const Global* global) {
         val = emit(continuation);
     else {
         auto llvm_type = convert(global->alloced_type());
-        auto var = llvm::cast<llvm::GlobalVariable>(module().getOrInsertGlobal(global->unique_name().c_str(), llvm_type));
+        auto var = llvm::cast<llvm::GlobalVariable>(module().getOrInsertGlobal(global->is_external() ? global->name().c_str() : global->unique_name().c_str(), llvm_type));
         var->setConstant(!global->is_mutable());
-        var->setLinkage(llvm::GlobalValue::InternalLinkage);
-        if (global->init()->isa<Bottom>())
-            var->setInitializer(llvm::Constant::getNullValue(llvm_type)); // HACK
-        else
+
+        if (global->init()->isa<Bottom>()) {
+            if (global->is_external())
+                var->setExternallyInitialized(true);
+            else
+                var->setInitializer(llvm::Constant::getNullValue(llvm_type)); // HACK
+        } else
             var->setInitializer(llvm::cast<llvm::Constant>(emit(global->init())));
+
+        if (global->is_external()) {
+            var->setAlignment(llvm::Align(4));
+            var->setDSOLocal(true);
+            var->setUnnamedAddr(llvm::GlobalVariable::UnnamedAddr::None);
+        } else
+            var->setLinkage(llvm::GlobalValue::InternalLinkage);
         val = var;
     }
     return val;
