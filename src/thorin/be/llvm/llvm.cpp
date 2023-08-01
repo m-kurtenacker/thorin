@@ -204,11 +204,11 @@ llvm::Type* CodeGen::convert(const Type* type) {
             size_t max_align = 0, max_size = 0;
 
             auto layout = module().getDataLayout();
-            llvm::Type* max_align_type;
+            llvm::Type* max_align_type = llvm::Type::getVoidTy(context());
             for (auto op : variant_type->types()) {
                 auto op_type = convert(op);
                 size_t size  = layout.getTypeAllocSize(op_type);
-                size_t align = layout.getABITypeAlignment(op_type);
+                size_t align = layout.getABITypeAlign(op_type).value();
                 // Favor types that are not empty
                 if (align > max_align || (align == max_align && max_align_type->isEmptyTy())) {
                     max_align_type = op_type;
@@ -743,7 +743,7 @@ llvm::Value* CodeGen::emit_builder(llvm::IRBuilder<>& irbuilder, const Def* def)
         return irbuilder.CreateSelect(cond, tval, fval);
     } else if (auto align_of = def->isa<AlignOf>()) {
         auto type = convert(align_of->of());
-        return irbuilder.getInt64(module().getDataLayout().getABITypeAlignment(type));
+        return irbuilder.getInt64(module().getDataLayout().getABITypeAlign(type).value());
     } else if (auto size_of = def->isa<SizeOf>()) {
         auto type = convert(size_of->of());
         return irbuilder.getInt64(module().getDataLayout().getTypeAllocSize(type));
