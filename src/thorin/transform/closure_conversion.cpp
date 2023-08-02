@@ -26,25 +26,27 @@ public:
 
             auto new_type = world_.fn_type(defs2types(convert_type(continuation->type())->ops()));
             if (new_type != continuation->type()) {
-                //The function type was changed, so the continuation takes another function as a parameter.
                 auto new_continuation = world_.continuation(new_type->as<FnType>(), continuation->debug());
                 if (continuation->is_intrinsic())
                     new_continuation->set_intrinsic();
 
-                converted.emplace_back(continuation, new_continuation);
                 new_defs_[continuation] = new_continuation;
-                for (size_t i = 0, e = continuation->num_params(); i != e; ++i)
-                    new_defs_[continuation->param(i)] = new_continuation->param(i);
-            } else {
-                //The type remains unchanged, do not generate a new continuation.
-                //We still need to add the continuation to converted, to ensure the jump will be converted later on.
+                if (continuation->has_body()) {
+                    auto body = continuation->body();
+                    for (size_t i = 0, e = continuation->num_params(); i != e; ++i)
+                        new_defs_[continuation->param(i)] = new_continuation->param(i);
+                    // copy existing call from old continuation
+                    new_continuation->jump(body->callee(), body->args(), continuation->debug());
+                    converted.emplace_back(continuation, new_continuation);
+                }
+            } else if (continuation->has_body()) {
                 converted.emplace_back(continuation, continuation);
             }
         }
 
         // convert the calls to each continuation
         for (auto pair : converted)
-            convert_jump(pair.first, pair.second);
+            convert_jump(pair.second);
 
         // remove old continuations
         for (auto pair : converted) {
@@ -55,41 +57,17 @@ public:
         }
     }
 
-    //Convert jump and all arguments.
-    void convert_jump(Continuation* source, Continuation* target) {
-        assert(source);
-        assert(target);
-
-        if (!converted_.emplace(source).second)
-            return; //Was already converted once before.
-
-        assert(source->has_body());
-        auto body = source->body();
-
-        auto callee = body->callee()->isa_nom<Continuation>();
-
-        if (callee == source) {
-            target->jump(callee, body->args(), source->debug());
-            return;
-        }
-
+    void convert_jump(Continuation* continuation) {
+        assert(continuation->has_body());
+        auto body = continuation->body();
         // prevent conversion of calls to vectorize() or cuda(), but allow graph intrinsics
+        auto callee = body->callee()->isa_nom<Continuation>();
+        if (callee == continuation) return;
         if (!callee || !callee->is_intrinsic()) {
             Array<const Def*> new_args(body->num_args());
             for (size_t i = 0, e = body->num_args(); i != e; ++i)
                 new_args[i] = convert_def(body->arg(i));
-            target->jump(convert_def(body->callee(), true), new_args, source->debug());
-        } else {
-            Array<const Def*> new_args(body->num_args());
-            for (size_t i = 0, e = body->num_args(); i != e; ++i) {
-                if (body->arg(i)->type()->isa<FnType>())
-                    new_args[i] = body->arg(i);
-                else if (callee->intrinsic() == Intrinsic::Match && i > 2)
-                    new_args[i] = body->arg(i);
-                else
-                    new_args[i] = convert_def(body->arg(i));
-            }
-            target->jump(callee, new_args, source->debug());
+            continuation->jump(convert_def(body->callee(), true), new_args, continuation->debug());
         }
     }
 
@@ -97,20 +75,16 @@ public:
         if (auto t = def->isa<Type>())
             return convert_type(t);
 
-        if (auto * source = def->isa_nom<Continuation>()) {
-            if (new_defs_.count(def)) def = new_defs_[def];
-            auto continuation = def->isa_nom<Continuation>();
-            assert(continuation);
+        if (new_defs_.count(def)) def = new_defs_[def];
+        if (def->order() <= 1)
+            return def;
 
+        if (auto continuation = def->isa_nom<Continuation>()) {
+            if (!continuation->has_body())
+                return continuation;
+            convert_jump(continuation);
             if (as_callee)
                 return continuation;
-            if (!source->has_body())
-                return continuation;
-            if (continuation->order() <= 1)
-                return continuation;
-
-            convert_jump(source, continuation); //convert_jump must be executed so that continuation has a body.
-            assert(continuation->has_body());
 
             world_.WLOG("slow: closure generated for '{}'", continuation);
 
@@ -177,10 +151,6 @@ public:
             auto closure_type = convert_type(continuation->type());
             return world_.closure(closure_type->as<ClosureType>(), wrapper, thin_env ? free_vars[0] : world_.tuple(free_vars), continuation->debug());
         } else {
-            if (new_defs_.count(def)) return new_defs_[def];
-            if (def->isa<Param>() || def->isa<Closure>())
-                return def;
-
             // TODO need to consider Params?
             Array<const Def*> ops(def->ops());
             for (auto& op : ops) op = convert_def(op);
@@ -234,7 +204,6 @@ private:
     World& world_;
     Def2Def new_defs_;
     DefMap<const Type*> new_types_;
-    ContinuationSet converted_;
 };
 
 

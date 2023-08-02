@@ -89,9 +89,9 @@ public:
     //@{
     bool empty() { return data_.externals_.empty(); }
     const Externals& externals() const { return data_.externals_; }
-    void make_external(Def* cont) { assert(&cont->world() == this); data_.externals_.emplace(cont->unique_name(), cont); }
-    void make_internal(Def* cont) { assert(&cont->world() == this); data_.externals_.erase(cont->unique_name()); }
-    bool is_external(const Def* cont) { return data_.externals_.contains(cont->unique_name()); }
+    void make_external(Def* def) { assert(&def->world() == this); data_.externals_.emplace(def->unique_name(), def); }
+    void make_internal(Def* def) { assert(&def->world() == this); data_.externals_.erase(def->unique_name()); }
+    bool is_external(const Def* def) { return data_.externals_.contains(def->unique_name()); }
     Def* lookup(const std::string& name) { return data_.externals_.lookup(name).value_or(nullptr); }
     //@}
 
