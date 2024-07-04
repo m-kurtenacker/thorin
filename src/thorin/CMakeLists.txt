@@ -1,114 +1,117 @@
 set(THORIN_SOURCES
+    ../../include/thorin/analyses/cfg.h
+    ../../include/thorin/analyses/domtree.h
+    ../../include/thorin/analyses/free_defs.h
+    ../../include/thorin/analyses/looptree.h
+    ../../include/thorin/analyses/schedule.h
+    ../../include/thorin/analyses/scope.h
+    ../../include/thorin/analyses/verify.h
+    ../../include/thorin/be/c/c.h
+    ../../include/thorin/be/codegen.h
+    ../../include/thorin/be/emitter.h
+    ../../include/thorin/be/json/json.h
+    ../../include/thorin/be/kernel_config.h
+    ../../include/thorin/be/llvm/amdgpu.h
+    ../../include/thorin/be/llvm/amdgpu_hsa.h
+    ../../include/thorin/be/llvm/amdgpu_pal.h
+    ../../include/thorin/be/llvm/cpu.h
+    ../../include/thorin/be/llvm/llvm.h
+    ../../include/thorin/be/llvm/nvvm.h
+    ../../include/thorin/be/llvm/runtime.h
+    ../../include/thorin/tables/allnodes.h
+    ../../include/thorin/tables/arithoptable.h
+    ../../include/thorin/tables/cmptable.h
+    ../../include/thorin/tables/mathoptable.h
+    ../../include/thorin/tables/nodetable.h
+    ../../include/thorin/tables/primtypetable.h
+    ../../include/thorin/transform/closure_conversion.h
+    ../../include/thorin/transform/codegen_prepare.h
+    ../../include/thorin/transform/dead_load_opt.h
+    ../../include/thorin/transform/flatten_tuples.h
+    ../../include/thorin/transform/hls_channels.h
+    ../../include/thorin/transform/hls_kernel_launch.h
+    ../../include/thorin/transform/hoist_enters.h
+    ../../include/thorin/transform/importer.h
+    ../../include/thorin/transform/inliner.h
+    ../../include/thorin/transform/lift_builtins.h
+    ../../include/thorin/transform/mangle.h
+    ../../include/thorin/transform/partial_evaluation.h
+    ../../include/thorin/transform/plugin_execute.h
+    ../../include/thorin/transform/resolve_loads.h
+    ../../include/thorin/transform/rewrite.h
+    ../../include/thorin/transform/split_slots.h
+    ../../include/thorin/util/array.h
+    ../../include/thorin/util/cast.h
+    ../../include/thorin/util/hash.h
+    ../../include/thorin/util/indexmap.h
+    ../../include/thorin/util/indexset.h
+    ../../include/thorin/util/iterator.h
+    ../../include/thorin/util/scoped_dump.h
+    ../../include/thorin/util/stream.h
+    ../../include/thorin/util/symbol.h
+    ../../include/thorin/util/types.h
+    ../../include/thorin/util/utility.h
+    ../../include/thorin/config.h.in
+    ../../include/thorin/continuation.h
+    ../../include/thorin/debug.h
+    ../../include/thorin/def.h
+    ../../include/thorin/enums.h
+    ../../include/thorin/primop.h
+    ../../include/thorin/type.h
+    ../../include/thorin/world.h
+
     continuation.cpp
-    continuation.h
     debug.cpp
-    debug.h
     def.cpp
-    def.h
     enums.cpp
-    enums.h
     primop.cpp
-    primop.h
     rec_stream.cpp
     type.cpp
-    type.h
     world.cpp
-    world.h
     analyses/cfg.cpp
-    analyses/cfg.h
     analyses/domtree.cpp
-    analyses/domtree.h
     analyses/free_defs.cpp
-    analyses/free_defs.h
     analyses/looptree.cpp
-    analyses/looptree.h
     analyses/schedule.cpp
-    analyses/schedule.h
     analyses/scope.cpp
-    analyses/scope.h
     analyses/verify.cpp
-    analyses/verify.h
     be/codegen.cpp
-    be/codegen.h
-    be/emitter.h
     be/c/c.cpp
-    be/c/c.h
-    be/kernel_config.h
-    tables/allnodes.h
-    tables/arithoptable.h
-    tables/cmptable.h
-    tables/nodetable.h
-    tables/primtypetable.h
-    tables/mathoptable.h
     transform/cleanup_world.cpp
     transform/closure_conversion.cpp
-    transform/closure_conversion.h
-    transform/codegen_prepare.h
     transform/codegen_prepare.cpp
     transform/dead_load_opt.cpp
-    transform/dead_load_opt.h
     transform/hls_channels.cpp
-    transform/hls_channels.h
-    transform/hls_kernel_launch.h
     transform/hls_kernel_launch.cpp
     transform/hoist_enters.cpp
-    transform/hoist_enters.h
     transform/flatten_tuples.cpp
-    transform/flatten_tuples.h
     transform/importer.cpp
-    transform/importer.h
     transform/inliner.cpp
-    transform/inliner.h
     transform/lift_builtins.cpp
-    transform/lift_builtins.h
     transform/mangle.cpp
-    transform/mangle.h
     transform/partial_evaluation.cpp
-    transform/partial_evaluation.h
     transform/rewrite.cpp
-    transform/rewrite.h
     transform/plugin_execute.cpp
-    transform/plugin_execute.h
     transform/resolve_loads.cpp
-    transform/resolve_loads.h
     transform/split_slots.cpp
-    transform/split_slots.h
-    util/array.h
-    util/cast.h
-    util/hash.h
     util/hash.cpp
-    util/indexmap.h
-    util/indexset.h
-    util/iterator.h
     util/stream.cpp
-    util/stream.h
     util/symbol.cpp
-    util/symbol.h
-    util/types.h
-    util/utility.h
     util/graphviz_dump.cpp
-    util/scoped_dump.h
     util/scoped_dump.cpp
     )
 
 if(LLVM_FOUND)
     list(APPEND THORIN_SOURCES
         be/llvm/cpu.cpp
-        be/llvm/cpu.h
         be/llvm/llvm.cpp
-        be/llvm/llvm.h
         be/llvm/amdgpu.cpp
-        be/llvm/amdgpu.h
         be/llvm/amdgpu_hsa.cpp
-        be/llvm/amdgpu_hsa.h
         be/llvm/amdgpu_pal.cpp
-        be/llvm/amdgpu_pal.h
         be/llvm/nvvm.cpp
-        be/llvm/nvvm.h
         be/llvm/parallel.cpp
         be/llvm/runtime.inc
         be/llvm/runtime.cpp
-        be/llvm/runtime.h
         be/llvm/vectorize.cpp
     )
 endif()
@@ -122,12 +125,11 @@ endif()
 if(THORIN_ENABLE_JSON)
     list(APPEND THORIN_SOURCES
         be/json/json.cpp
-        be/json/json.h
     )
 endif()
 
 add_library(thorin ${THORIN_SOURCES})
-target_include_directories(thorin PUBLIC ${Half_INCLUDE_DIRS} ${Thorin_ROOT_DIR}/src ${CMAKE_BINARY_DIR}/include)
+target_include_directories(thorin PUBLIC ${Half_INCLUDE_DIRS} ${Thorin_ROOT_DIR}/src ${Thorin_ROOT_DIR}/include ${CMAKE_BINARY_DIR}/include)
 
 if(LLVM_FOUND)
     set(Thorin_LLVM_COMPONENTS core support ipo target ${LLVM_TARGETS_TO_BUILD})
