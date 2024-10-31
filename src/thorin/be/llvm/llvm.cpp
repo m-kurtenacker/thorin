@@ -4,7 +4,7 @@
 #include <stdexcept>
 #include <unordered_map> // TODO don't used std::unordered_*
 
-#include <llvm/ADT/Triple.h>
+#include <llvm/TargetParser/Triple.h>
 #include <llvm/IR/Constant.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Function.h>
@@ -17,7 +17,7 @@
 #include <llvm/IR/Type.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Passes/PassBuilder.h>
-#include <llvm/Support/Host.h>
+#include <llvm/TargetParser/Host.h>
 #include <llvm/Support/Path.h>
 #include <llvm/Support/raw_os_ostream.h>
 #include <llvm/Support/FileSystem.h>
@@ -1064,8 +1064,7 @@ llvm::Value* CodeGen::emit_alloc(llvm::IRBuilder<>& irbuilder, const Type* type,
 llvm::Value* CodeGen::emit_release(llvm::IRBuilder<>& irbuilder, const Def* alloc) {
     auto llvm_release = runtime_->get(*this, get_release_name().c_str());
     llvm::Value* llvm_alloc = emit(alloc);
-    llvm::Value* cast_alloc = irbuilder.CreatePointerCast(llvm_alloc, irbuilder.getInt8PtrTy());
-    llvm::Value* release_args[] = { irbuilder.getInt32(0), cast_alloc };
+    llvm::Value* release_args[] = { irbuilder.getInt32(0), llvm_alloc };
     irbuilder.CreateCall(llvm_release, release_args);
     return nullptr;
 }
