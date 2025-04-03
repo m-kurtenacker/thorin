@@ -442,6 +442,7 @@ public:
     }
 
     friend BasicBlockBuilder;
+    friend CodeGen;
 };
 
 inline Id SectionBuilder::fresh_id() {

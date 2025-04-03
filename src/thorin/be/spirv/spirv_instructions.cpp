@@ -149,6 +149,7 @@ std::vector<Id> CodeGen::emit_device_function_call(const App& app, const Continu
             }
         }
         world().ELOG("spirv.decorate requires an integer literal as the argument");
+
     } else if (device_fn->name() == "spirv.builtin") {
         std::vector<Id> productions;
         if (auto spv_builtin_lit = app.arg(1)->isa<PrimLit>()) {
@@ -167,6 +168,50 @@ std::vector<Id> CodeGen::emit_device_function_call(const App& app, const Continu
             return productions;
         } else
             world().ELOG("spirv.builtin requires an integer literal as the argument");
+
+    } else if (device_fn->name() == "spirv.operation") {
+        if (auto spv_operation_lit = app.arg(1)->isa<PrimLit>()) {
+            auto spv_operation = spv_operation_lit->value().get_u32();
+            auto args = emit_args(app.arg(2)->ops());
+
+            spv::Op op = static_cast<spv::Op>(spv_operation);
+            auto produced_types = get_produced_types();
+            if (produced_types.size() > 1) {
+                auto result = bb->op_with_result(op, convert(produced_types[1]).id, args);
+                return { result };
+            } else {
+                bb->op(op, args);
+                return { };
+            }
+        } else
+            world().ELOG("spirv.operation requires an integer literal as the first argument");
+
+    } else if (device_fn->name() == "spirv.extension") {
+        auto string = app.arg(1)->op(0)->op(0); //TODO: this can fail!
+        if (auto arr_type = string->type()->isa<DefiniteArrayType>(); arr_type->elem_type() == world().type_pu8()) {
+            auto arr = string->as<DefiniteArray>();
+            std::vector<char> the_string;
+            for (size_t i = 0; i < arr_type->dim(); i++)
+                the_string.push_back(arr->op(i)->as<PrimLit>()->value().get_u8());
+
+            std::string extension(the_string.begin(), the_string.end());
+
+            builder_->extension(extension);
+
+            return { };
+        } else
+            world().ELOG("spirv.extension requires a string literal as the argument");
+
+    } else if (device_fn->name() == "spirv.capability") {
+        if (auto spv_capability_lit = app.arg(1)->isa<PrimLit>()) {
+            auto spv_capability = spv_capability_lit->value().get_u32();
+
+            builder_->capability(static_cast<spv::Capability>(spv_capability));
+
+            return { };
+        } else
+            world().ELOG("spirv.capability requires an integer literal as the argument");
+
     } else if (device_fn->name() == "reserve_shared") {
         auto produced_t = get_produced_type()->as<PtrType>();
         auto pointee = produced_t->pointee();
