@@ -166,3 +166,7 @@ endif()
 if(THORIN_ENABLE_JSON)
     target_link_libraries(thorin PRIVATE nlohmann_json::nlohmann_json)
 endif()
+
+if(THORIN_ENABLE_SPIRV)
+    target_link_libraries(thorin PRIVATE SPIRV-Headers::SPIRV-Headers)
+endif()
