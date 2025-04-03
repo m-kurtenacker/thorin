@@ -119,6 +119,43 @@ std::vector<Id> CodeGen::emit_intrinsic(const App& app, const Continuation* intr
             return productions;
         } else
             world().ELOG("spirv.builtin requires an integer literal as the argument");
+
+    } else if (intrinsic->name() == "spirv.coop_matrix.load") {
+        auto args = emit_args(app.args().skip_back());
+
+        auto [ptr, layout, stride] = *(std::array<Id, 3>*)args.data();
+
+        builder_->extension("SPV_KHR_cooperative_matrix");
+        builder_->capability(spv::Capability::CapabilityCooperativeMatrixKHR);
+
+        spv::Op op = spv::Op::OpCooperativeMatrixLoadKHR;
+        auto result = bb->op_with_result(op, convert(get_produced_type()).id, { ptr, layout, stride });
+        return { result };
+
+    } else if (intrinsic->name() == "spirv.coop_matrix.mad") {
+        auto args = emit_args(app.args().skip_back());
+
+        auto [a, b, c] = *(std::array<Id, 3>*)args.data();
+
+        builder_->extension("SPV_KHR_cooperative_matrix");
+        builder_->capability(spv::Capability::CapabilityCooperativeMatrixKHR);
+
+        spv::Op op = spv::Op::OpCooperativeMatrixMulAddKHR;
+        auto result = bb->op_with_result(op, convert(get_produced_type()).id, { a, b, c });
+        return { result };
+
+    } else if (intrinsic->name() == "spirv.coop_matrix.store") {
+        auto args = emit_args(app.args().skip_back());
+
+        auto [ptr, data, layout, stride] = *(std::array<Id, 4>*)args.data();
+
+        builder_->extension("SPV_KHR_cooperative_matrix");
+        builder_->capability(spv::Capability::CapabilityCooperativeMatrixKHR);
+
+        spv::Op op = spv::Op::OpCooperativeMatrixStoreKHR;
+        bb->op(op, { ptr, data, layout, stride });
+        return { };
+
     } else if (intrinsic->name() == "reserve_shared") {
         auto produced_t = get_produced_type()->as<PtrType>();
         auto pointee = produced_t->pointee();

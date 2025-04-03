@@ -295,6 +295,56 @@ ConvertedType CodeGen::convert(const Type* type) {
             assert(false && "MemType cannot be converted to SPIR-V");
         }
 
+        case Node_ExternType: {
+            builder_->extension("SPV_KHR_cooperative_matrix");
+            builder_->capability(spv::Capability::CapabilityCooperativeMatrixKHR);
+
+            const ExternType* extern_type = type->as<ExternType>();
+
+            auto op_type_str = extern_type->args()[0];
+            auto component_type_str = extern_type->args()[1];
+            auto scope_str = extern_type->args()[2];
+            auto rows_str = extern_type->args()[3];
+            auto cols_str = extern_type->args()[4];
+            auto use_str = extern_type->args()[5];
+
+            Id scope_literal = literal(stoi(scope_str));
+            Id rows_literal = literal(stoi(rows_str));
+            Id cols_literal = literal(stoi(cols_str));
+            Id use_literal = literal(stoi(use_str));
+
+            assert(op_type_str == "OpTypeCooperativeMatrixKHR");
+
+            Id member_type_id = 0;
+            std::optional<ConvertedType::Layout> member_type_layout = std::nullopt;
+            if (component_type_str == "half") {
+                auto member_type = convert(world().type_qf16());
+                member_type_id = member_type.id;
+                member_type_layout = member_type.layout;
+            } else if (component_type_str == "float") {
+                auto member_type = convert(world().type_qf32());
+                member_type_id = member_type.id;
+                member_type_layout = member_type.layout;
+            } else {
+                THORIN_UNREACHABLE;
+            }
+
+            builder_->types_constants.begin_op(spv::Op::OpTypeCooperativeMatrixKHR, 7);
+
+            auto id = builder_->generate_fresh_id();
+
+            builder_->types_constants.ref_id(id);
+            builder_->types_constants.ref_id(member_type_id);
+            builder_->types_constants.ref_id(scope_literal);
+            builder_->types_constants.ref_id(rows_literal);
+            builder_->types_constants.ref_id(cols_literal);
+            builder_->types_constants.ref_id(use_literal);
+
+            converted.id = id;
+            converted.layout = member_type_layout;
+            break;
+        }
+
         default:
             THORIN_UNREACHABLE;
     }
