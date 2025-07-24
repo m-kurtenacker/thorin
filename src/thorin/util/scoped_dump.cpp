@@ -35,6 +35,22 @@ void ScopedWorld::stream_cont(thorin::Stream& s, Continuation* cont) const {
             s.fmt(", ");
     }
     s.fmt(")");
+
+    if (!cont->filter()->empty()) {
+        s.fmt(" @");
+        if (cont->filter()->no_dep()) {
+            s.fmt("{}", cont->filter());
+        } else {
+            s.fmt("{}(", cont->filter());
+            for (size_t i = 0; i < cont->filter()->size(); i++) {
+                if (i != 0) s.fmt(", ");
+                auto cond = cont->filter()->condition(i);
+                s.fmt("{}", cond);
+            }
+            s.fmt(")");
+        }
+    }
+
     if (!cont->has_body()) {
         s.fmt(";");
         return;
@@ -56,6 +72,14 @@ void ScopedWorld::stream_cont(thorin::Stream& s, Continuation* cont) const {
         //i++;
     }
 
+    if (!cont->filter()->empty()) {
+        if (!cont->filter()->no_dep()) {
+            for (size_t i = 0; i < cont->filter()->size(); i++) {
+                auto cond = cont->filter()->condition(i);
+                prepare_def(cont, cond);
+            }
+        }
+    }
     prepare_def(cont, cont->body());
 
     auto defs = *scopes_to_defs_[cont];
