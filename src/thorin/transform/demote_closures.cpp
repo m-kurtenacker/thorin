@@ -1,6 +1,7 @@
 #include "demote_closures.h"
 
 #include "thorin/analyses/scope.h"
+#include "thorin/transform/mangle.h"
 
 namespace thorin {
 
@@ -58,33 +59,48 @@ struct ClosureDemoter {
 
                 if (self_param_ok && !closure_needed) {
                     auto fn = closure->fn();
-                    auto env_param = fn->append_param(closure->env()->type());
-
-                    if (env)
-                        env->replace_uses(world_.tuple({env->mem(), env_param}));
+                    //auto env_param = fn->append_param(closure->env()->type());
 
                     auto old_fn_uses = fn->copy_uses();
+                    if (env) {
+                        Scope cope(fn);
 
-                    const Def* dummy_closure = world_.bottom(closure->type());
+                        auto args = Array<const Def*>(fn->num_params());
+                        const Def* dummy_closure = world_.bottom(closure->type());
+                        if (closure->self_param() >= 0)
+                            args[closure->self_param()] = dummy_closure;
 
-                    replace_calls(closure->copy_uses(), closure, fn, dummy_closure, closure->env(), env_param, 0);
-                    replace_calls(old_fn_uses, closure, fn, dummy_closure, closure->env(), env_param, 1);
+                        struct R : public Mangler {
+                            explicit R(Scope& s, Defs args, const ClosureEnv* env) : Mangler(s, s.entry(), args), env_(env) {
+                                //auto fn = instantiate(f)->as_nom<Continuation>();
+                            }
+
+                            const Def* rewrite(const thorin::Def* odef) override {
+                                if (odef == env_) {
+                                    //auto fn = instantiate(fn_)->as_nom<Continuation>();
+                                    //auto env_param = fn->append_param(env_->type());
+                                    auto env_param = add_param(env_->env_type());
+                                    return dst().tuple({ instantiate(env_->mem()), env_param});
+                                }
+                                return Mangler::rewrite(odef);
+                            }
+
+                            const ClosureEnv* env_;
+                        } r(cope, args, env);
+
+                        fn = r.mangle();
+                    }
+
+                    for (auto use : closure->copy_uses()) {
+                        auto app = use->isa<App>();
+                        if (!app) continue;
+                        world_.VLOG("demote_closures: {} calls closure {} which only consumes its environment, replacing with fn {}", app, closure, fn);
+                        auto nargs = concat(app->args(), { closure->env() });
+                        app->replace_uses(world_.app(fn, nargs, app->debug()));
+                        todo_ = true;
+                    }
                 }
             }
-        }
-    }
-
-    void replace_calls(ArrayRef<Use> old_uses, const Closure* closure, Continuation* wrapper, const Def* dummy, const Def* env, const Def* env_param, int cut_args) {
-        Scope s(wrapper);
-        Array<const Def*> additional_args = {dummy, env};
-        Array<const Def*> additional_args_inside = {dummy, env_param};
-        for (auto use : old_uses) {
-            auto app = use->isa<App>();
-            if (!app) continue;
-            world_.VLOG("demote_closures: {} calls closure {} which only consumes its environment, replacing with wrapper {}", app, closure, wrapper);
-            auto nargs = concat(app->args().skip_back(cut_args), s.contains(app) ? additional_args_inside : additional_args);
-            app->replace_uses(world_.app(wrapper, nargs, app->debug()));
-            todo_ = true;
         }
     }
 
