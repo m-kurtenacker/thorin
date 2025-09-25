@@ -59,11 +59,10 @@ struct ClosureDemoter {
 
                 if (self_param_ok && !closure_needed) {
                     auto fn = closure->fn();
-                    //auto env_param = fn->append_param(closure->env()->type());
 
                     auto old_fn_uses = fn->copy_uses();
                     if (env) {
-                        Scope cope(fn);
+                        Scope scope(fn);
 
                         auto args = Array<const Def*>(fn->num_params());
                         const Def* dummy_closure = world_.bottom(closure->type());
@@ -71,14 +70,10 @@ struct ClosureDemoter {
                             args[closure->self_param()] = dummy_closure;
 
                         struct R : public Mangler {
-                            explicit R(Scope& s, Defs args, const ClosureEnv* env) : Mangler(s, s.entry(), args), env_(env) {
-                                //auto fn = instantiate(f)->as_nom<Continuation>();
-                            }
+                            explicit R(Scope& s, Defs args, const ClosureEnv* env) : Mangler(s, s.entry(), args), env_(env) {}
 
                             const Def* rewrite(const thorin::Def* odef) override {
                                 if (odef == env_) {
-                                    //auto fn = instantiate(fn_)->as_nom<Continuation>();
-                                    //auto env_param = fn->append_param(env_->type());
                                     auto env_param = add_param(env_->env_type());
                                     return dst().tuple({ instantiate(env_->mem()), env_param});
                                 }
@@ -86,7 +81,7 @@ struct ClosureDemoter {
                             }
 
                             const ClosureEnv* env_;
-                        } r(cope, args, env);
+                        } r(scope, args, env);
 
                         fn = r.mangle();
                     }
