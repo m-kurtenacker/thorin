@@ -179,7 +179,7 @@ static const FnType* patch_entry_point_signature(const FnType* type) {
     for (auto t : type->types()) {
         if (cl_demands_passed_by_reference(t))
             t = world.ptr_type(t, 1, AddrSpace::Function);
-        else if (auto fn = t->isa<FnType>())
+        else if (auto fn = t->isa<FnType>(); fn && fn->tag() == Node_FnType)
             t = patch_entry_point_signature(fn);
         else if (auto ptr = t->isa<PtrType>()) {
             if (ptr->addr_space() == AddrSpace::Generic)
@@ -196,7 +196,7 @@ FnBuilder& CodeGen::get_fn_builder(thorin::Continuation* continuation) {
     }
 
     auto& fn = *(builder_->fn_builders_[continuation] = std::make_unique<FnBuilder>(*builder_));
-    auto fn_type = entry_->type();
+    auto fn_type = continuation->type();
     if (kernel_config_ && kernel_config_->contains(continuation)) {
         fn_type = patch_entry_point_signature(fn_type);
     }
