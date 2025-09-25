@@ -518,8 +518,7 @@ const Def* ClosureConverter::ScopeRewriter::rewrite(const Def* const odef) {
                     // function arguments to accelerators have to be left alone,
                     // but it's easier to let them be closure converted and undo it by lambda lifting
                     // and dropping the closure inside the wrapper
-                    if (i == kernel_i) {
-                        auto closure = nargs[kernel_i]->as<Closure>();
+                    if (i == kernel_i) if (auto closure = nargs[kernel_i]->isa<Closure>()) {
                         auto& free_vars = converter_.lookup(old_body).free_vars;
                         Array<const Type*> instantiated_free_vars = Array<const Type*>(free_vars.size(), [&](const int i) -> const Type* {
                             return instantiate(free_vars[i]->type())->as<Type>();
