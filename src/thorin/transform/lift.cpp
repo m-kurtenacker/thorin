@@ -524,21 +524,33 @@ const Def* ClosureConverter::ScopeRewriter::rewrite(const Def* const odef) {
                         Array<const Type*> instantiated_free_vars = Array<const Type*>(free_vars.size(), [&](const int i) -> const Type* {
                             return instantiate(free_vars[i]->type())->as<Type>();
                         });
-                        auto closure_env_type = dst().tuple_type(instantiated_free_vars);
+
                         auto kernel_wrapper = dst().continuation(ncallee->type()->as<FnType>()->domain()[kernel_i]->as<FnType>());
-                        // TODO: make environments lists instead of tuples
-                        auto env_param = kernel_wrapper->append_param(closure_env_type);
-                        nargs.push_back(closure->env());
+
+                        // patch the callee - make up a new intrinsic that matches the kernel wrapper signature !
+                        std::vector<const Type*> nintrinsic_types;
+                        for (auto t : ncont->type()->copy_types())
+                            nintrinsic_types.push_back(t);
+
+                        auto closure_env_type = dst().tuple_type(instantiated_free_vars);
                         auto inner_closure = dst().closure(closure->type(), closure->debug());
                         inner_closure->set_fn(closure->fn(), closure->self_param());
-                        inner_closure->set_env(env_param);
-                        kernel_wrapper->jump(inner_closure, kernel_wrapper->params_as_defs().skip_back(1));
+                        // TODO: make environments lists instead of tuples
+                        // TODO: and/or get rid of this when flatten_tuples removes unit params
+                        if (closure_env_type != dst().unit_type()) {
+                            auto env_param = kernel_wrapper->append_param(closure_env_type);
+                            nargs.push_back(closure->env());
+                            inner_closure->set_env(env_param);
+                            nintrinsic_types.push_back(closure_env_type);
+                            //nintrinsic->append_param(closure_env_type);
+                            kernel_wrapper->jump(inner_closure, kernel_wrapper->params_as_defs().skip_back(1));
+                        } else {
+                            inner_closure->set_env(dst().tuple({}));
+                            kernel_wrapper->jump(inner_closure, kernel_wrapper->params_as_defs());
+                        }
                         nargs[kernel_i] = kernel_wrapper;
-                        // patch the callee - make up a new intrinsic that matches the kernel wrapper signature !
-                        auto nintrinsic_types = ncont->type()->copy_types();
                         nintrinsic_types[kernel_i] = kernel_wrapper->type();
                         auto nintrinsic = dst().continuation(dst().fn_type(nintrinsic_types), ncont->attributes(),ncont->debug());
-                        nintrinsic->append_param(closure_env_type);
                         ncallee = nintrinsic;
                         continue;
                     }
