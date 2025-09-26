@@ -206,7 +206,7 @@ std::vector<Id> CodeGen::emit_intrinsic(const App& app, const Continuation* intr
         Array<const Def*> args = app.args();
         while (auto bitcast = args[1]->isa<Bitcast>())
             args[1] = bitcast->from();
-        return { bb->ext_instruction(convert(world().unit_type()).id, { .set_name = "OpenCL.std", .id = OpenCLLIB::Printf }, emit_args(args)) };
+        return { bb->ext_instruction(convert(get_produced_type()).id, { .set_name = "OpenCL.std", .id = OpenCLLIB::Printf }, emit_args(args)) };
     }
     world().ELOG("thorin/spirv: Intrinsic '{}' isn't recognised", intrinsic->name());
     exit(-1);

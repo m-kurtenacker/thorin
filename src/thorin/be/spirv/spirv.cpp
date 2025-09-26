@@ -126,9 +126,16 @@ void CodeGen::emit_stream(std::ostream& out) {
         queue_scope(scope.entry());
     });
 
-    for (auto def : world().defs()) {
-        if (auto global = def->isa<Global>())
-            builder.interface.push_back(emit(global));
+    for (auto def : world().copy_defs()) {
+        if (auto global = def->isa<Global>()) {
+            switch (global->type()->addr_space()) {
+                case AddrSpace::Input:
+                case AddrSpace::Output:
+                    builder.interface.push_back(emit(global));
+                    break;
+                default: break;
+            }
+        }
     }
 
     emit_scopes(forest);
@@ -505,7 +512,7 @@ Id CodeGen::emit_constant(const thorin::Def* def) {
             init = std::make_optional(emit(global->init()));
         }
         // TODO: this will break with recursive globals
-        auto var = builder_->global_variable(convert(global->alloced_type()).id, sc, init);
+        auto var = builder_->global_variable(convert(world().ptr_type(global->alloced_type(), 1, AddrSpace::Constant)).id, sc, init);
         return var;
     } else if (auto arr = def->isa<DefiniteArray>()) {
         std::vector<Id> contents;
