@@ -66,8 +66,8 @@ std::tuple<spv::Scope, spv::MemorySemanticsMask> addrspace_atomics_params(World&
 
 std::vector<Id> CodeGen::emit_intrinsic(const App& app, const Continuation* intrinsic, BasicBlockBuilder* bb) {
     auto get_produced_types = [&]() {
-        auto ret_type = (*intrinsic->params().back()).type()->as<FnType>();
-        return *ret_type->codomain();
+        auto fn_type = intrinsic->type();
+        return *(fn_type->codomain());
     };
 
     auto get_produced_type = [&]() {
