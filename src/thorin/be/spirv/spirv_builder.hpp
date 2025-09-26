@@ -293,12 +293,14 @@ struct FileBuilder {
         return id;
     }
 
-    Id variable(Id type, spv::StorageClass storage_class) {
-        types_constants.begin_op(spv::Op::OpVariable, 4);
+    Id global_variable(Id type, spv::StorageClass storage_class, std::optional<Id> init = std::nullopt) {
+        types_constants.begin_op(spv::Op::OpVariable, init ? 5 : 4);
         types_constants.ref_id(type);
         auto id = generate_fresh_id();
         types_constants.ref_id(id);
         types_constants.literal_int(storage_class);
+        if (init)
+            types_constants.literal_int(*init);
         return id;
     }
 

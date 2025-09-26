@@ -495,6 +495,24 @@ Id CodeGen::emit_constant(const thorin::Def* def) {
         return constant;
     } else if (auto rp = def->isa<ReturnPoint>()) {
         return emit(rp->continuation());
+    } else if (auto global = def->isa<Global>()) {
+        spv::StorageClass sc = spv::StorageClassPrivate;
+        if (!global->is_mutable()) {
+            sc = spv::StorageClassUniformConstant;
+        }
+        std::optional<Id> init;
+        if (global->init()) {
+            init = std::make_optional(emit(global->init()));
+        }
+        // TODO: this will break with recursive globals
+        auto var = builder_->global_variable(convert(global->alloced_type()).id, sc, init);
+        return var;
+    } else if (auto arr = def->isa<DefiniteArray>()) {
+        std::vector<Id> contents;
+        for (auto e : arr->ops()) {
+            contents.push_back(emit(e));
+        }
+        return builder_->constant_composite(convert(arr->type()).id, contents);
     }
 
     assertf(false, "Incomplete emit(def) definition");
