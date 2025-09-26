@@ -23,6 +23,10 @@ uint32_t CodeGen::convert(AddrSpace as) {
             storage_class = spv::StorageClassWorkgroup;
             break;
         }
+        case AddrSpace::Constant: {
+            storage_class = spv::StorageClassUniformConstant;
+            break;
+        }
         case AddrSpace::Push:     storage_class = spv::StorageClassPushConstant;          break;
         case AddrSpace::Input:    storage_class = spv::StorageClassInput;                 break;
         case AddrSpace::Output:   storage_class = spv::StorageClassOutput;                break;
