@@ -203,7 +203,7 @@ std::vector<Id> CodeGen::emit_intrinsic(const App& app, const Continuation* intr
         auto result = bb->op_with_result(spv::Op::OpGroupAll, convert(get_produced_type()).id,  { literal(spv::Scope::ScopeInvocation), emit(app.arg(1)) });
         return { result };
     } else if (intrinsic->name() == "spirv.printf") {
-        Array<const Def*> args = app.args();
+        Array<const Def*> args = app.args().skip_back();
         while (auto bitcast = args[1]->isa<Bitcast>())
             args[1] = bitcast->from();
         return { bb->ext_instruction(convert(get_produced_type()).id, { .set_name = "OpenCL.std", .id = OpenCLLIB::Printf }, emit_args(args)) };

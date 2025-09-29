@@ -124,9 +124,9 @@ static void add_scope_to_schedule(Schedule& sched, const Scope& s) {
 Schedule schedule(const Scope& scope) {
     // until we have sth better simply use the RPO of the CFG
     Schedule result;
-    //for (auto n : scope.f_cfg().reverse_post_order())
-    //    result.emplace_back(n->continuation());
-    add_scope_to_schedule(result, scope);
+    for (auto n : scope.f_cfg().reverse_post_order())
+        result.emplace_back(n->continuation());
+    //add_scope_to_schedule(result, scope);
 
     return result;
 }
