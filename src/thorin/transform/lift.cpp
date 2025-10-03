@@ -531,22 +531,45 @@ const Def* ClosureConverter::ScopeRewriter::rewrite(const Def* const odef) {
                         for (auto t : ncont->type()->copy_types())
                             nintrinsic_types.push_back(t);
 
-                        auto closure_env_type = dst().tuple_type(instantiated_free_vars);
                         auto inner_closure = dst().closure(closure->type(), closure->debug());
                         inner_closure->set_fn(closure->fn(), closure->self_param());
-                        // TODO: make environments lists instead of tuples
-                        // TODO: and/or get rid of this when flatten_tuples removes unit params
-                        if (closure_env_type != dst().unit_type()) {
-                            auto env_param = kernel_wrapper->append_param(closure_env_type);
-                            nargs.push_back(closure->env());
-                            inner_closure->set_env(env_param);
-                            nintrinsic_types.push_back(closure_env_type);
-                            //nintrinsic->append_param(closure_env_type);
-                            kernel_wrapper->jump(inner_closure, kernel_wrapper->params_as_defs().skip_back(1));
-                        } else {
-                            inner_closure->set_env(dst().tuple({}));
-                            kernel_wrapper->jump(inner_closure, kernel_wrapper->params_as_defs());
-                        }
+
+                        // TODO: get rid of this when flatten_tuples handles this case
+                        struct {
+                            World& world;
+                            Continuation* wrapper;
+                            std::vector<const Def*>& nargs;
+                            std::vector<const Type*>& nintrinsic_types;
+                            int count = 0;
+
+                            const Def* flatten(const Def* def) {
+                                auto t = def->type();
+
+                                if (auto tuple_t = t->isa<TupleType>()) {
+                                    std::vector<const Def*> ops;
+                                    for (size_t i = 0; i < tuple_t->num_ops(); i++)
+                                        ops.push_back(flatten(world.extract(def, i)));
+                                    return world.tuple(ops);
+                                } else if (auto struct_t = t->isa<StructType>()) {
+                                    std::vector<const Def*> ops;
+                                    for (size_t i = 0; i < struct_t->num_ops(); i++)
+                                        ops.push_back(flatten(world.extract(def, i)));
+                                    return world.struct_agg(struct_t, ops);
+                                } else if (auto closure = t->isa<ClosureType>()) {
+                                    world.ELOG("Closures cannot be captured in kernels for now.");
+                                    abort();
+                                } else {
+                                    auto env_param = wrapper->append_param(t);
+                                    count++;
+                                    nargs.push_back(def);
+                                    nintrinsic_types.push_back(t);
+                                    return env_param;
+                                }
+                            }
+                        } flattener = { dst(), kernel_wrapper, nargs, nintrinsic_types };
+                        inner_closure->set_env(flattener.flatten(closure->env()));
+
+                            kernel_wrapper->jump(inner_closure, kernel_wrapper->params_as_defs().skip_back(flattener.count));
                         nargs[kernel_i] = kernel_wrapper;
                         nintrinsic_types[kernel_i] = kernel_wrapper->type();
                         auto nintrinsic = dst().continuation(dst().fn_type(nintrinsic_types), ncont->attributes(),ncont->debug());
