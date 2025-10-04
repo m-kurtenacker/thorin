@@ -48,7 +48,7 @@ bool Cleaner::eliminate_tail_rec_scope(thorin::Scope& scope) {
             } else if (use->isa<Param>())
                 continue; // ignore params
 
-            world().ELOG("non-recursive usage of {} index:{} use:{}", scope.entry()->name(), use.index(), use.def()->to_string());
+            //world().ELOG("non-recursive usage of {} index:{} use:{}", scope.entry()->name(), use.index(), use.def()->to_string());
             only_tail_calls = false;
             break;
         }

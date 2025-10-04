@@ -70,9 +70,9 @@ ReturnPoint::ReturnPoint(World& world, const Continuation* destination, Debug db
 const Def* ReturnPoint::rebuild(World& world, const Type*, Defs nops) const {
     auto def = nops.front();
     // TODO: have some kind of generalised mechanism to obtain the 'real' def
-    //while (auto run = def->isa<Run>()) {
-    //    def = run->def();
-    //}
+    while (auto run = def->isa<Run>()) {
+        def = run->def();
+    }
     //while (auto closure = def->isa<Closure>()) {
     //    def = closure->fn();
     //}
