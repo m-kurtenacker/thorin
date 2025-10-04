@@ -406,16 +406,53 @@ void CodeGen::emit_epilogue(Continuation* continuation) {
         bb->terminator.branch_conditional(cond, tbb, fbb);
     } else if (app.callee()->isa<Continuation>() && app.callee()->as<Continuation>()->intrinsic() == Intrinsic::Match) {
         emit_unsafe(app.arg(0));
-        auto val = emit(app.arg(1));
-        auto otherwise_bb = emit_as_bb(app.arg(2)->isa_nom<Continuation>());
-        std::vector<Id> literals;
-        std::vector<Id> cases;
-        for (size_t i = 3; i < app.num_args(); i++) {
-            auto arg = app.arg(i)->as<Tuple>();
-            literals.push_back(emit(arg->op(0)));
-            cases.push_back(emit_as_bb(arg->op(1)->as_nom<Continuation>()));
+        Id val = emit(app.arg(1));
+        Id otherwise_bb = emit_as_bb(app.arg(2)->isa_nom<Continuation>());
+        if (auto int_t = app.arg(1)->type()->isa<PrimType>()) {
+            switch (int_t->primtype_tag()) {
+                case PrimType_ps32:
+                case PrimType_pu32:
+                case PrimType_qs32:
+                case PrimType_qu32: {
+                    std::vector<uint32_t> literals;
+                    std::vector<Id> cases;
+                    for (size_t i = 3; i < app.num_args(); i++) {
+                        auto arg = app.arg(i)->as<Tuple>();
+                        auto literal= arg->op(0)->isa<PrimLit>();
+                        if (!literal) {
+                            assertf(false, "Matched values must be literals");
+                        }
+                        literals.push_back(literal->value().get_u32());
+                        cases.push_back(emit_as_bb(arg->op(1)->as_nom<Continuation>()));
+                    }
+                    bb->terminator.branch_switch(val, otherwise_bb, literals, cases);
+                    break;
+                }
+                case PrimType_ps64:
+                case PrimType_pu64:
+                case PrimType_qs64:
+                case PrimType_qu64: {
+                    std::vector<uint64_t> literals;
+                    std::vector<Id> cases;
+                    for (size_t i = 3; i < app.num_args(); i++) {
+                        auto arg = app.arg(i)->as<Tuple>();
+                        auto literal= arg->op(0)->isa<PrimLit>();
+                        if (!literal) {
+                            assertf(false, "Matched values must be literals");
+                        }
+                        literals.push_back(literal->value().get_u64());
+                        cases.push_back(emit_as_bb(arg->op(1)->as_nom<Continuation>()));
+                    }
+                    bb->terminator.branch_switch64(val, otherwise_bb, literals, cases);
+                    break;
+                }
+                default:
+                    assertf(false, "Matched values must be 32-bit integers");
+                    break;
+            }
+        } else {
+            assertf(false, "Matched values must be 32-bit integers");
         }
-        bb->terminator.branch_switch(val, otherwise_bb, literals, cases);
     } else if (app.callee()->isa<Bottom>()) {
         bb->terminator.unreachable();
     } else if (auto intrinsic = app.callee()->isa_nom<Continuation>(); intrinsic && (intrinsic->is_intrinsic() || intrinsic->cc() == CC::Device)) {
@@ -734,8 +771,10 @@ Id CodeGen::emit_bb(BasicBlockBuilder* bb, const Def* def) {
 
         return bb->load(convert(target_type).id, scratch);
     } else if (auto vindex = def->isa<VariantIndex>()) {
-        auto value = emit(vindex->op(0));
-        return bb->extract(convert(world().type_pu32()).id, value, { 0 });
+        Id value = emit(vindex->op(0));
+        Id index = bb->extract(convert(world().type_pu32()).id, value, { 0 });
+        index = bb->convert(spv::OpUConvert, convert(world().type_pu64()).id, index);
+        return index;
     } else if (auto tuple = def->isa<Tuple>()) {
         scope_local_defs_.insert(def);
         return emit_composite(bb, convert(tuple->type()).id, tuple->ops());
