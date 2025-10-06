@@ -1591,7 +1591,7 @@ std::string CCodeGen::emit_fun_head(Continuation* cont, bool is_proto) {
     bool needs_comma = false;
     for (size_t i = 0, n = cont->num_params(); i < n; ++i) {
         auto param = cont->param(i);
-        if ((lang_ == Lang::C99 || lang_ == Lang::CUDA) && param->type()->isa<ReturnType>()) {
+        if (param->type()->isa<ReturnType>()) {
             defs_[param] = "";
             continue;
         }
