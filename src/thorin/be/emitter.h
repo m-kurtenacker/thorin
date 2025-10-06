@@ -41,7 +41,9 @@ private:
         }
 
         //auto place = def->no_dep() ? entry_ : scheduler_.smart(def);
-        auto place = !scheduler_.scope().contains(def) ? entry_ : scheduler_.smart(def);
+        Continuation* place = nullptr;
+        if (&scheduler_.scope())
+            place = !scheduler_.scope().contains(def) ? entry_ : scheduler_.smart(def);
 
         if (place) {
             auto& bb = cont2bb_[place];

@@ -1228,7 +1228,7 @@ const Def* World::return_point(const thorin::Continuation* destination, thorin::
     // but we're wrapping the cont here so we can do just that!
     if (destination->has_body()) {
         auto dbody = destination->body();
-        assert(dbody->callee() != destination);
+        //assert(dbody->callee() != destination);
 
         auto can_eta_reduce = [&]() -> bool {
             if (dbody->args() == destination->params_as_defs()) {

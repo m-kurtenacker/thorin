@@ -126,9 +126,16 @@ void CodeGen::emit_stream(std::ostream& out) {
         queue_scope(scope.entry());
     });
 
-    for (auto def : world().defs()) {
-        if (auto global = def->isa<Global>())
-            builder.interface.push_back(emit(global));
+    for (auto def : world().copy_defs()) {
+        if (auto global = def->isa<Global>()) {
+            switch (global->type()->addr_space()) {
+                case AddrSpace::Input:
+                case AddrSpace::Output:
+                    builder.interface.push_back(emit(global));
+                    break;
+                default: break;
+            }
+        }
     }
 
     emit_scopes(forest);
@@ -179,7 +186,7 @@ static const FnType* patch_entry_point_signature(const FnType* type) {
     for (auto t : type->types()) {
         if (cl_demands_passed_by_reference(t))
             t = world.ptr_type(t, 1, AddrSpace::Function);
-        else if (auto fn = t->isa<FnType>())
+        else if (auto fn = t->isa<FnType>(); fn && fn->tag() == Node_FnType)
             t = patch_entry_point_signature(fn);
         else if (auto ptr = t->isa<PtrType>()) {
             if (ptr->addr_space() == AddrSpace::Generic)
@@ -196,7 +203,7 @@ FnBuilder& CodeGen::get_fn_builder(thorin::Continuation* continuation) {
     }
 
     auto& fn = *(builder_->fn_builders_[continuation] = std::make_unique<FnBuilder>(*builder_));
-    auto fn_type = entry_->type();
+    auto fn_type = continuation->type();
     if (kernel_config_ && kernel_config_->contains(continuation)) {
         fn_type = patch_entry_point_signature(fn_type);
     }
@@ -399,16 +406,53 @@ void CodeGen::emit_epilogue(Continuation* continuation) {
         bb->terminator.branch_conditional(cond, tbb, fbb);
     } else if (app.callee()->isa<Continuation>() && app.callee()->as<Continuation>()->intrinsic() == Intrinsic::Match) {
         emit_unsafe(app.arg(0));
-        auto val = emit(app.arg(1));
-        auto otherwise_bb = emit_as_bb(app.arg(2)->isa_nom<Continuation>());
-        std::vector<Id> literals;
-        std::vector<Id> cases;
-        for (size_t i = 3; i < app.num_args(); i++) {
-            auto arg = app.arg(i)->as<Tuple>();
-            literals.push_back(emit(arg->op(0)));
-            cases.push_back(emit_as_bb(arg->op(1)->as_nom<Continuation>()));
+        Id val = emit(app.arg(1));
+        Id otherwise_bb = emit_as_bb(app.arg(2)->isa_nom<Continuation>());
+        if (auto int_t = app.arg(1)->type()->isa<PrimType>()) {
+            switch (int_t->primtype_tag()) {
+                case PrimType_ps32:
+                case PrimType_pu32:
+                case PrimType_qs32:
+                case PrimType_qu32: {
+                    std::vector<uint32_t> literals;
+                    std::vector<Id> cases;
+                    for (size_t i = 3; i < app.num_args(); i++) {
+                        auto arg = app.arg(i)->as<Tuple>();
+                        auto literal= arg->op(0)->isa<PrimLit>();
+                        if (!literal) {
+                            assertf(false, "Matched values must be literals");
+                        }
+                        literals.push_back(literal->value().get_u32());
+                        cases.push_back(emit_as_bb(arg->op(1)->as_nom<Continuation>()));
+                    }
+                    bb->terminator.branch_switch(val, otherwise_bb, literals, cases);
+                    break;
+                }
+                case PrimType_ps64:
+                case PrimType_pu64:
+                case PrimType_qs64:
+                case PrimType_qu64: {
+                    std::vector<uint64_t> literals;
+                    std::vector<Id> cases;
+                    for (size_t i = 3; i < app.num_args(); i++) {
+                        auto arg = app.arg(i)->as<Tuple>();
+                        auto literal= arg->op(0)->isa<PrimLit>();
+                        if (!literal) {
+                            assertf(false, "Matched values must be literals");
+                        }
+                        literals.push_back(literal->value().get_u64());
+                        cases.push_back(emit_as_bb(arg->op(1)->as_nom<Continuation>()));
+                    }
+                    bb->terminator.branch_switch64(val, otherwise_bb, literals, cases);
+                    break;
+                }
+                default:
+                    assertf(false, "Matched values must be 32-bit integers");
+                    break;
+            }
+        } else {
+            assertf(false, "Matched values must be 32-bit integers");
         }
-        bb->terminator.branch_switch(val, otherwise_bb, literals, cases);
     } else if (app.callee()->isa<Bottom>()) {
         bb->terminator.unreachable();
     } else if (auto intrinsic = app.callee()->isa_nom<Continuation>(); intrinsic && (intrinsic->is_intrinsic() || intrinsic->cc() == CC::Device)) {
@@ -495,6 +539,24 @@ Id CodeGen::emit_constant(const thorin::Def* def) {
         return constant;
     } else if (auto rp = def->isa<ReturnPoint>()) {
         return emit(rp->continuation());
+    } else if (auto global = def->isa<Global>()) {
+        spv::StorageClass sc = spv::StorageClassPrivate;
+        if (!global->is_mutable()) {
+            sc = spv::StorageClassUniformConstant;
+        }
+        std::optional<Id> init;
+        if (global->init()) {
+            init = std::make_optional(emit(global->init()));
+        }
+        // TODO: this will break with recursive globals
+        auto var = builder_->global_variable(convert(world().ptr_type(global->alloced_type(), 1, AddrSpace::Constant)).id, sc, init);
+        return var;
+    } else if (auto arr = def->isa<DefiniteArray>()) {
+        std::vector<Id> contents;
+        for (auto e : arr->ops()) {
+            contents.push_back(emit(e));
+        }
+        return builder_->constant_composite(convert(arr->type()).id, contents);
     }
 
     assertf(false, "Incomplete emit(def) definition");
@@ -709,8 +771,10 @@ Id CodeGen::emit_bb(BasicBlockBuilder* bb, const Def* def) {
 
         return bb->load(convert(target_type).id, scratch);
     } else if (auto vindex = def->isa<VariantIndex>()) {
-        auto value = emit(vindex->op(0));
-        return bb->extract(convert(world().type_pu32()).id, value, { 0 });
+        Id value = emit(vindex->op(0));
+        Id index = bb->extract(convert(world().type_pu32()).id, value, { 0 });
+        index = bb->convert(spv::OpUConvert, convert(world().type_pu64()).id, index);
+        return index;
     } else if (auto tuple = def->isa<Tuple>()) {
         scope_local_defs_.insert(def);
         return emit_composite(bb, convert(tuple->type()).id, tuple->ops());
@@ -757,7 +821,7 @@ Id CodeGen::emit_bb(BasicBlockBuilder* bb, const Def* def) {
             return bb->ptr_access_chain(type, base, offset, {  });
         }
         if (target_info_.bugs.static_ac_indices_must_be_i32)
-            offset = emit(world().cast(world().type_pu32(), lea->index()));
+            offset = emit_bb(bb, world().cast(world().type_pu32(), lea->index()));
         return bb->access_chain(type, emit(lea->ptr()), { offset });
     } else if (auto aggop = def->isa<AggOp>()) {
         auto agg_type = convert(aggop->agg()->type()).id;

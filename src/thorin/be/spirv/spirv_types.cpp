@@ -23,6 +23,10 @@ uint32_t CodeGen::convert(AddrSpace as) {
             storage_class = spv::StorageClassWorkgroup;
             break;
         }
+        case AddrSpace::Constant: {
+            storage_class = spv::StorageClassUniformConstant;
+            break;
+        }
         case AddrSpace::Push:     storage_class = spv::StorageClassPushConstant;          break;
         case AddrSpace::Input:    storage_class = spv::StorageClassInput;                 break;
         case AddrSpace::Output:   storage_class = spv::StorageClassOutput;                break;
@@ -273,14 +277,14 @@ ConvertedType CodeGen::convert(const Type* type) {
 
             if (max_serialized_size > 0) {
                 auto payload_type = world().definite_array_type(world().type_pu8(), max_serialized_size);
-                auto struct_t = world().struct_type(type->name(), 2);
+                auto struct_t = world().struct_type(type->to_string(), 2);
                 struct_t->set_op(0, tag_type);
                 struct_t->set_op(1, payload_type);
                 converted = convert(struct_t);
                 converted.variant.payload_t = std::make_optional(payload_type);
             } else {
                 // We keep this useless level of struct so the rest of the code doesn't need a special path to extract the tag
-                auto struct_t = world().struct_type(type->name(), 1);
+                auto struct_t = world().struct_type(type->to_string(), 1);
                 struct_t->set_op(0, tag_type);
                 converted = convert(struct_t);
             }

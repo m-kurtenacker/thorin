@@ -330,7 +330,7 @@ std::string CCodeGen::convert(const Type* type) {
         s.fmt("{} data;", convert(Closure::environment_type(world())));
         s.fmt("\b\n}} {};\n", name);
     } else if (auto pi = type->isa<FnType>()) {
-        assert(lang_ == Lang::C99 || lang_ == Lang::CUDA && "Only C and CUDA support function pointers");
+        assert((lang_ == Lang::C99 || lang_ == Lang::CUDA) && "Only C and CUDA support function pointers");
         name = fn_name(pi);
         std::vector<std::string> dom;
         for (auto p : pi->domain()) {
@@ -927,7 +927,14 @@ void CCodeGen::emit_epilogue(Continuation* cont) {
             if (!body->arg(1)->isa<PrimLit>())
                 world().edef(body->arg(1), "reserve_shared: couldn't extract memory size");
 
-            auto ret_cont = body->arg(2)->as_nom<Continuation>();
+            //For now, the return continuation should be lifted to a ReturnPoint, but this might change with intrinsic handling.
+            assert(body->arg(2)->isa<Continuation>() || body->arg(2)->isa<ReturnPoint>());
+            Continuation* ret_cont;
+            if (body->arg(2)->isa<Continuation>())
+                ret_cont = body->arg(2)->as_nom<Continuation>();
+            else
+                ret_cont = body->arg(2)->as<ReturnPoint>()->continuation();
+
             auto elem_type = ret_cont->param(1)->type()->as<PtrType>()->pointee()->as<ArrayType>()->elem_type();
             func_impls_.fmt("{}{} {}_reserved[{}];\n",
                 addr_space_prefix(AddrSpace::Shared), convert(elem_type),
@@ -1589,7 +1596,7 @@ std::string CCodeGen::emit_fun_head(Continuation* cont, bool is_proto) {
     bool needs_comma = false;
     for (size_t i = 0, n = cont->num_params(); i < n; ++i) {
         auto param = cont->param(i);
-        if (lang_ == Lang::C99 && param->type()->isa<ReturnType>()) {
+        if (param->type()->isa<ReturnType>()) {
             defs_[param] = "";
             continue;
         }

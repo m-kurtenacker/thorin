@@ -9,6 +9,12 @@
 
 namespace thorin {
 
+bool is_closure_convertible(Continuation* cont) {
+    if (cont->is_external() || cont->is_intrinsic())
+        return false;
+    return true;
+}
+
 struct ClosureConverter {
     ClosureConverter(World& src, World& dst) : src_(src), dst_(dst), root_rewriter_(*this, nullptr, nullptr), forest_(src) {
         assert(&src != &dst);
@@ -101,20 +107,24 @@ struct ClosureConverter {
 
         scan_siblings(scope.children_scopes());
 
-        // convert any internal returning function
-        if (scope.entry()->is_returning() && !(scope.entry()->is_external() || scope.entry()->is_intrinsic())) {
-            a.promote_to_closure();
-        }
+        // these are banned from being turned into closures
+        bool convertible = is_closure_convertible(scope.entry());
 
-        // convert any BB that's used as a closure
-        else for (auto use : scope.entry()->uses()) {
-            if (!is_acceptable_use_for_bb(use))
+        if (convertible) {
+            // convert any internal returning function
+            if (scope.entry()->is_returning()) {
                 a.promote_to_closure();
+            }
+            // convert any BB that's used as a closure
+            else for (auto use: scope.entry()->uses()) {
+                if (!is_acceptable_use_for_bb(use))
+                    a.promote_to_closure();
+            }
         }
 
         src().DLOG("Needs conversion: {} = {}", scope.entry(), a.convert_to_closure);
 
-        if (scope.entry()->is_external() || scope.entry()->is_intrinsic()) {
+        if (!convertible) {
             assert(!a.convert_to_closure);
         }
     }
@@ -258,17 +268,35 @@ struct ClosureConverter {
         return nparam_types;
     }
 
-    Continuation* as_continuation(const Def* ndef) {
-        if (auto found = as_continuations_.lookup(ndef))
+    /// make sure the wrappee is a continuation (it's type is a FnType)
+    Continuation* wrap_in_cont(const Def* wrappee) {
+        if (auto found = wrapped_.lookup(wrappee))
             return found.value();
 
-        if (auto ncont = ndef->isa_nom<Continuation>())
-            return ncont;
-        Debug wr_dbg = ndef->debug();
-        auto wrapper = dst().continuation(dst().fn_type(ndef->type()->as<FnType>()->types()), wr_dbg);
-        wrapper->jump(ndef, wrapper->params_as_defs());
-        as_continuations_[ndef] = wrapper;
+        if (auto cont = wrappee->isa_nom<Continuation>())
+            return cont;
+
+        auto& world = wrappee->world();
+        auto wrapper = world.continuation(world.fn_type(wrappee->type()->as<FnType>()->types()), wrappee->debug());
+        wrapper->jump(wrappee, wrapper->params_as_defs());
+        wrapped_[wrappee] = wrapper;
         return wrapper;
+    }
+
+    Closure* wrap_in_closure(const Continuation* wrappee) {
+        auto closure_type = dst().closure_type(wrappee->type()->types());
+
+        auto ncont = dst().continuation(wrappee->type(), wrappee->debug());
+        ncont->jump(wrappee, ncont->params_as_defs());
+
+        // add a 'self' parameter
+        auto closure_param = ncont->append_param(closure_type, {"self"});
+
+        auto closure = dst().closure(closure_type, wrappee->debug());
+        assert(closure_param);
+        closure->set_fn(ncont, closure_param ? (int) closure_param->index() : -1);
+        closure->set_env(dst().tuple({}));
+        return closure;
     }
 
     World& src_;
@@ -279,7 +307,7 @@ struct ClosureConverter {
     ScopeRewriter root_rewriter_;
     ScopesForest forest_;
     ContinuationMap<std::unique_ptr<ScopeAnalysis>> analysis_;
-    DefMap<Continuation*> as_continuations_;
+    DefMap<Continuation*> wrapped_;
 
     std::vector<Continuation*> closure_fns_;
 
@@ -422,7 +450,7 @@ const Def* ClosureConverter::ScopeRewriter::rewrite(const Def* const odef) {
         assert(ndef);
         return ndef;
     } else if (auto ret_pt = odef->isa<ReturnPoint>()) {
-        auto new_ret_pt = dst().return_point(converter_.as_continuation(instantiate(ret_pt->continuation())));
+        auto new_ret_pt = dst().return_point(converter_.wrap_in_cont(instantiate(ret_pt->continuation())));
         return dst().capture_return(new_ret_pt);
     } else if (auto closure = odef->isa<Closure>()) {
         assert(false);
@@ -437,9 +465,18 @@ const Def* ClosureConverter::ScopeRewriter::rewrite(const Def* const odef) {
             auto oarg = app->arg(i);
             nargs[i] = instantiate(oarg);
 
+            if (auto ocont = oarg->isa_nom<Continuation>()) {
+                // if we're passing something that wasn't convertible to
+                if (!is_closure_convertible(ocont) && ncallee->type()->as<FnType>()->types()[i]->tag() != Node_FnType) {
+                    auto ncont = nargs[i]->isa<Continuation>();
+                    assert(ncont);
+                    nargs[i] = converter_.wrap_in_closure(ncont);
+                }
+            }
+
             // ensure return params still get a RetType
             if ((int)i == ret_param_i) {
-                nargs[i] = dst().return_point(converter_.as_continuation(nargs[i]));
+                nargs[i] = dst().return_point(converter_.wrap_in_cont(nargs[i]));
             }
         }
 
@@ -481,27 +518,61 @@ const Def* ClosureConverter::ScopeRewriter::rewrite(const Def* const odef) {
                     // function arguments to accelerators have to be left alone,
                     // but it's easier to let them be closure converted and undo it by lambda lifting
                     // and dropping the closure inside the wrapper
-                    if (i == kernel_i) {
-                        auto closure = nargs[kernel_i]->as<Closure>();
+                    if (i == kernel_i) if (auto closure = nargs[kernel_i]->isa<Closure>()) {
                         auto& free_vars = converter_.lookup(old_body).free_vars;
                         Array<const Type*> instantiated_free_vars = Array<const Type*>(free_vars.size(), [&](const int i) -> const Type* {
                             return instantiate(free_vars[i]->type())->as<Type>();
                         });
-                        auto closure_env_type = dst().tuple_type(instantiated_free_vars);
+
                         auto kernel_wrapper = dst().continuation(ncallee->type()->as<FnType>()->domain()[kernel_i]->as<FnType>());
-                        // TODO: make environments lists instead of tuples
-                        auto env_param = kernel_wrapper->append_param(closure_env_type);
-                        nargs.push_back(closure->env());
+
+                        // patch the callee - make up a new intrinsic that matches the kernel wrapper signature !
+                        std::vector<const Type*> nintrinsic_types;
+                        for (auto t : ncont->type()->copy_types())
+                            nintrinsic_types.push_back(t);
+
                         auto inner_closure = dst().closure(closure->type(), closure->debug());
                         inner_closure->set_fn(closure->fn(), closure->self_param());
-                        inner_closure->set_env(env_param);
-                        kernel_wrapper->jump(inner_closure, kernel_wrapper->params_as_defs().skip_back(1));
+
+                        // TODO: get rid of this when flatten_tuples handles this case
+                        struct {
+                            World& world;
+                            Continuation* wrapper;
+                            std::vector<const Def*>& nargs;
+                            std::vector<const Type*>& nintrinsic_types;
+                            int count = 0;
+
+                            const Def* flatten(const Def* def) {
+                                auto t = def->type();
+
+                                if (auto tuple_t = t->isa<TupleType>()) {
+                                    std::vector<const Def*> ops;
+                                    for (size_t i = 0; i < tuple_t->num_ops(); i++)
+                                        ops.push_back(flatten(world.extract(def, i)));
+                                    return world.tuple(ops);
+                                } else if (auto struct_t = t->isa<StructType>()) {
+                                    std::vector<const Def*> ops;
+                                    for (size_t i = 0; i < struct_t->num_ops(); i++)
+                                        ops.push_back(flatten(world.extract(def, i)));
+                                    return world.struct_agg(struct_t, ops);
+                                } else if (auto closure = t->isa<ClosureType>()) {
+                                    world.ELOG("Closures cannot be captured in kernels for now.");
+                                    abort();
+                                } else {
+                                    auto env_param = wrapper->append_param(t);
+                                    count++;
+                                    nargs.push_back(def);
+                                    nintrinsic_types.push_back(t);
+                                    return env_param;
+                                }
+                            }
+                        } flattener = { dst(), kernel_wrapper, nargs, nintrinsic_types };
+                        inner_closure->set_env(flattener.flatten(closure->env()));
+
+                            kernel_wrapper->jump(inner_closure, kernel_wrapper->params_as_defs().skip_back(flattener.count));
                         nargs[kernel_i] = kernel_wrapper;
-                        // patch the callee - make up a new intrinsic that matches the kernel wrapper signature !
-                        auto nintrinsic_types = ncont->type()->copy_types();
                         nintrinsic_types[kernel_i] = kernel_wrapper->type();
                         auto nintrinsic = dst().continuation(dst().fn_type(nintrinsic_types), ncont->attributes(),ncont->debug());
-                        nintrinsic->append_param(closure_env_type);
                         ncallee = nintrinsic;
                         continue;
                     }
@@ -509,9 +580,9 @@ const Def* ClosureConverter::ScopeRewriter::rewrite(const Def* const odef) {
                     // ensure the BB arguments to intrinsics such as branch and match are left as continuations
                     auto pt = ncont->type()->types()[i];
                     if (pt->tag() == Node_FnType)
-                        nargs[i] = converter_.as_continuation(nargs[i]);
+                        nargs[i] = converter_.wrap_in_cont(nargs[i]);
                     else if (auto tuple_t = pt->isa<TupleType>(); tuple_t && tuple_t->types()[1]->tag() == Node_FnType) {
-                        nargs[i] = dst().tuple({dst().extract(nargs[i], (u32) 0), converter_.as_continuation(dst().extract(nargs[i], (u32) 1)) });
+                        nargs[i] = dst().tuple({dst().extract(nargs[i], (u32) 0), converter_.wrap_in_cont(dst().extract(nargs[i], (u32) 1)) });
                     }
                 }
             }
