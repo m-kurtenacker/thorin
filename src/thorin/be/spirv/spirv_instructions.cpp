@@ -101,6 +101,7 @@ std::vector<Id> CodeGen::emit_intrinsic(const App& app, const Continuation* intr
         builder_->extension("SPV_KHR_non_semantic_info");
         bb->ext_instruction(convert(world().unit_type()).id, { "NonSemantic.DebugPrintf", 1}, args);
         return {};
+
     } else if (intrinsic->name() == "spirv.builtin") {
         std::vector<Id> productions;
         if (auto spv_builtin_lit = app.arg(1)->isa<PrimLit>()) {
@@ -120,41 +121,48 @@ std::vector<Id> CodeGen::emit_intrinsic(const App& app, const Continuation* intr
         } else
             world().ELOG("spirv.builtin requires an integer literal as the argument");
 
-    } else if (intrinsic->name() == "spirv.coop_matrix.load") {
-        auto args = emit_args(app.args().skip_back());
+    } else if (intrinsic->name() == "spirv.operation") {
+        if (auto spv_operation_lit = app.arg(1)->isa<PrimLit>()) {
+            auto spv_operation = spv_operation_lit->value().get_u32();
+            auto args = emit_args(app.arg(2)->ops());
 
-        auto [ptr, layout, stride] = *(std::array<Id, 3>*)args.data();
+            spv::Op op = static_cast<spv::Op>(spv_operation);
+            auto produced_types = get_produced_types();
+            if (produced_types.size() > 1) {
+                auto result = bb->op_with_result(op, convert(produced_types[1]).id, args);
+                return { result };
+            } else {
+                bb->op(op, args);
+                return { };
+            }
+        } else
+            world().ELOG("spirv.operation requires an integer literal as the first argument");
 
-        builder_->extension("SPV_KHR_cooperative_matrix");
-        builder_->capability(spv::Capability::CapabilityCooperativeMatrixKHR);
+    } else if (intrinsic->name() == "spirv.extension") {
+        auto string = app.arg(1)->op(0)->op(0); //TODO: this can fail!
+        if (auto arr_type = string->type()->isa<DefiniteArrayType>(); arr_type->elem_type() == world().type_pu8()) {
+            auto arr = string->as<DefiniteArray>();
+            std::vector<char> the_string;
+            for (size_t i = 0; i < arr_type->dim(); i++)
+                the_string.push_back(arr->op(i)->as<PrimLit>()->value().get_u8());
 
-        spv::Op op = spv::Op::OpCooperativeMatrixLoadKHR;
-        auto result = bb->op_with_result(op, convert(get_produced_type()).id, { ptr, layout, stride });
-        return { result };
+            std::string extension(the_string.begin(), the_string.end());
 
-    } else if (intrinsic->name() == "spirv.coop_matrix.mad") {
-        auto args = emit_args(app.args().skip_back());
+            builder_->extension(extension);
 
-        auto [a, b, c] = *(std::array<Id, 3>*)args.data();
+            return { };
+        } else
+            world().ELOG("spirv.extension requires a string literal as the argument");
 
-        builder_->extension("SPV_KHR_cooperative_matrix");
-        builder_->capability(spv::Capability::CapabilityCooperativeMatrixKHR);
+    } else if (intrinsic->name() == "spirv.capability") {
+        if (auto spv_capability_lit = app.arg(1)->isa<PrimLit>()) {
+            auto spv_capability = spv_capability_lit->value().get_u32();
 
-        spv::Op op = spv::Op::OpCooperativeMatrixMulAddKHR;
-        auto result = bb->op_with_result(op, convert(get_produced_type()).id, { a, b, c });
-        return { result };
+            builder_->capability(static_cast<spv::Capability>(spv_capability));
 
-    } else if (intrinsic->name() == "spirv.coop_matrix.store") {
-        auto args = emit_args(app.args().skip_back());
-
-        auto [ptr, data, layout, stride] = *(std::array<Id, 4>*)args.data();
-
-        builder_->extension("SPV_KHR_cooperative_matrix");
-        builder_->capability(spv::Capability::CapabilityCooperativeMatrixKHR);
-
-        spv::Op op = spv::Op::OpCooperativeMatrixStoreKHR;
-        bb->op(op, { ptr, data, layout, stride });
-        return { };
+            return { };
+        } else
+            world().ELOG("spirv.capability requires an integer literal as the argument");
 
     } else if (intrinsic->name() == "reserve_shared") {
         auto produced_t = get_produced_type()->as<PtrType>();
