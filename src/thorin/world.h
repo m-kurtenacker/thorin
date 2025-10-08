@@ -250,6 +250,7 @@ public:
     const Def* store(const Def* mem, const Def* ptr, const Def* val, Debug dbg = {});
     const Def* enter(const Def* mem, Debug dbg = {});
     const Def* slot(const Type* type, const Def* frame, Debug dbg = {}) { return cse(new Slot(*this, type, frame, dbg)); }
+    const Def* tie_mem(const Def* mem1, const Def* mem2, Debug dbg = {}) { return cse(new TieMem(*this, mem1, mem2, dbg)); };
     const Def* alloc(const Type* type, const Def* mem, const Def* extra, Debug dbg = {});
     const Def* alloc(const Type* type, const Def* mem, Debug dbg = {}) { return alloc(type, mem, literal_qu64(0, dbg), dbg); }
     const Def* closure_env(const Type* env_type, const Def* mem, const Def* closure, Debug dbg = {});

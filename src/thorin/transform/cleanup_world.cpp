@@ -27,6 +27,7 @@ public:
     void verify_closedness();
     void within(const Def*);
     void clean_pe_infos();
+    void clean_mem_ties();
 
 private:
     void cleanup_fix_point();
@@ -257,6 +258,42 @@ void Cleaner::clean_pe_infos() {
     }
 }
 
+void Cleaner::clean_mem_ties() {
+    //This only works if the second operand dominates the first.
+    //IMHO we should allow memory ties to combine unrelated memory monads. This would allow us more flexibility reordering unrelated memory operations.
+    world().VLOG("cleaning remaining tie_mem instructions");
+    std::queue<Continuation*> queue;
+    ContinuationSet done;
+    auto enqueue = [&](Continuation* continuation) {
+        if (done.emplace(continuation).second)
+            queue.push(continuation);
+    };
+
+    for (auto&& [_, def] : world().externals())
+        if (auto cont = def->isa<Continuation>(); cont && cont->has_body()) enqueue(cont);
+
+    while (!queue.empty()) {
+        auto continuation = pop(queue);
+
+        if (continuation->has_body()) {
+            if (auto body = continuation->body()->isa<App>()) {
+                auto mem_arg = continuation->body()->as<App>()->arg(0);
+                while (auto mem_op = mem_arg->isa<MemOp>()) {
+                    if (const TieMem* tie = mem_op->isa<TieMem>()) {
+                        mem_arg = tie->mem();
+                        tie->replace_uses(mem_arg);
+                    } else {
+                        mem_arg = mem_op->mem();
+                    }
+                }
+            }
+        }
+
+        for (auto succ : continuation->succs())
+            enqueue(succ);
+    }
+}
+
 void Cleaner::cleanup_fix_point() {
     int i = 0;
     for (; todo_; ++i) {
@@ -271,10 +308,11 @@ void Cleaner::cleanup_fix_point() {
         rebuild(); // resolve replaced defs before going to resolve_loads
         todo_ |= resolve_loads(world());
         rebuild();
-        //if (!world().is_pe_done())
-            todo_ |= partial_evaluation(world());
-        //else
-        //    clean_pe_infos();
+        todo_ |= partial_evaluation(world());
+        if (world().is_pe_done()) {
+            clean_pe_infos();
+            clean_mem_ties();
+        }
     }
 }
 

@@ -246,6 +246,10 @@ const Def* Cell::rebuild(World& w, const Type* t, Defs o) const {
     return w.stack_cell(o[0], debug());
 }
 
+const Def* TieMem::rebuild(World& w, const Type*, Defs o) const {
+    return w.tie_mem(o[0], o[1], debug());
+}
+
 const Def* Alloc::rebuild(World& w, const Type* t, Defs o) const {
     return w.alloc(t->as<TupleType>()->op(1)->as<PtrType>()->pointee(), o[0], o[1], debug());
 }
