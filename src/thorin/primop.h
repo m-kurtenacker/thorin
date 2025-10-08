@@ -580,6 +580,24 @@ private:
     bool equal(const Def* other) const override { return this == other; }
 };
 
+class TieMem : public MemOp {
+private:
+    TieMem(World& world, const Def* mem1, const Def* mem2, Debug dbg) :
+        MemOp(world, NodeTag::Node_TieMem, mem1->type(), { mem1, mem2 }, dbg)
+    {
+        assert(mem1->type()->isa<MemType>());
+        assert(mem2->type()->isa<MemType>());
+    }
+
+public:
+    bool has_multiple_outs() const override { return false; }
+
+private:
+    const Def* rebuild(World&, const Type*, Defs) const override;
+
+    friend class World;
+};
+
 class ClosureEnv : public MemOp {
 private:
     ClosureEnv(World& world, const Type* type, const Def* mem, const Def* src, Debug dbg);

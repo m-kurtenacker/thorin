@@ -11,6 +11,7 @@
             THORIN_NODE(MemBlob, mem_blob)
             THORIN_NODE(BlobPtr, mem_blob)
         // MemOp
+            THORIN_NODE(TieMem, tie_mem)
             THORIN_NODE(Alloc, alloc)
             THORIN_NODE(Cell, cell)
             // Access
