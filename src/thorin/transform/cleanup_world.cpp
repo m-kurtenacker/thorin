@@ -276,8 +276,8 @@ void Cleaner::clean_mem_ties() {
         auto continuation = pop(queue);
 
         if (continuation->has_body()) {
-            if (auto body = continuation->body()->isa<App>()) {
-                auto mem_arg = continuation->body()->as<App>()->arg(0);
+            if (auto body = continuation->body()->isa<App>(); body && body->num_args() > 0) {
+                auto mem_arg = body->arg(0);
 
                 while (auto extract = mem_arg->isa<Extract>()) {
                     mem_arg = extract->agg();
