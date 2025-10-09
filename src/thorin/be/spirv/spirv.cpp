@@ -742,7 +742,8 @@ Id CodeGen::emit_bb(BasicBlockBuilder* bb, const Def* def) {
 
             auto cast_type = convert(world().ptr_type(variant->value()->type(), 1, AddrSpace::Function));
             auto scratch_cast = bb->op_with_result(spv::Op::OpBitcast, cast_type.id, { scratch });
-            bb->store(emit(variant->value()), scratch_cast);
+            if (convert(variant->value()->type()).layout->size > 0)
+                bb->store(emit(variant->value()), scratch_cast);
 
             auto payload = bb->load(convert(payload_t.value()).id, scratch);
 
@@ -915,6 +916,12 @@ Id CodeGen::emit_bb(BasicBlockBuilder* bb, const Def* def) {
 
             return bb->convert(spv::OpBitcast, convert(bitcast->type()).id, emit(bitcast->from()));
         } else if (auto cast = def->isa<Cast>()) {
+            if (src_type->isa<PrimType>() && dst_type->isa<PtrType>()) {
+                return bb->convert(spv::OpConvertUToPtr, convert(dst_type).id, emit(cast->from()));
+            }
+            if (src_type->isa<PtrType>() && dst_type->isa<PrimType>()) {
+                return bb->convert(spv::OpConvertPtrToU, convert(dst_type).id, emit(cast->from()));
+            }
 
             // NB: all ops used here are scalar/vector agnostic
             auto src_prim = src_type->isa<PrimType>();
