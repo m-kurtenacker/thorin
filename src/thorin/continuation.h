@@ -129,6 +129,7 @@ enum class Intrinsic : uint8_t {
     OpenCL,                     ///< Internal OpenCL-Backend.
     OpenCL_SPIRV,               ///< Internal OpenCL-Backend.
     LevelZero_SPIRV,            ///< Internal SPIRV for Level0-Backend.
+    VulkanCS_SPIRV,             ///< Internal SPIRV for Vulkan-Backend.
     AMDGPUHSA,                  ///< Internal AMDGPU-HSA-Backend.
     AMDGPUPAL,                  ///< Internal AMDGPU-PAL-Backend.
     ShadyCompute,               ///< Internal Shady Compute Backend.

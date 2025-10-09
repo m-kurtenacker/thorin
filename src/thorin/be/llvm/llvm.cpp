@@ -1335,6 +1335,7 @@ std::vector<llvm::Value*> CodeGen::emit_intrinsic(llvm::IRBuilder<>& irbuilder, 
         case Intrinsic::LevelZero_SPIRV: runtime_->emit_host_code(*this, irbuilder, Platform::LEVEL_ZERO_PLATFORM, ".spv",    continuation); break;
         case Intrinsic::AMDGPUHSA:       runtime_->emit_host_code(*this, irbuilder, Platform::HSA_PLATFORM,        ".amdgpu", continuation); break;
         case Intrinsic::AMDGPUPAL:       runtime_->emit_host_code(*this, irbuilder, Platform::PAL_PLATFORM,        ".amdgpu", continuation); break;
+        case Intrinsic::VulkanCS_SPIRV:  runtime_->emit_host_code(*this, irbuilder, Platform::VULKAN_PLATFORM,     ".spv",    continuation); break;
         case Intrinsic::ShadyCompute:    runtime_->emit_host_code(*this, irbuilder, Platform::SHADY_PLATFORM,      ".shady",  continuation); break;
         case Intrinsic::HLS:             emit_hls(irbuilder, continuation);      break;
         case Intrinsic::Parallel:        emit_parallel(irbuilder, continuation); break;

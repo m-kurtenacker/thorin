@@ -163,6 +163,19 @@ struct LevelZeroSPIRVBackend : public Backend {
         return std::make_unique<spirv::CodeGen>(device_code_, target, backends_.debug(), &kernel_configs_);
     }
 };
+
+struct VulkanSPIRVBackend : public Backend {
+    explicit VulkanSPIRVBackend(DeviceBackends& b, World& src) : Backend(b, src) {
+        b.register_intrinsic(Intrinsic::VulkanCS_SPIRV, *this, get_gpu_kernel_config);
+    }
+
+    std::unique_ptr<CodeGen> create_cg() override {
+        spirv::Target target;
+        target.bugs = {};
+        target.dialect = spirv::Target::Vulkan;
+        return std::make_unique<spirv::CodeGen>(device_code_, target, backends_.debug(), &kernel_configs_);
+    }
+};
 #endif
 
 #if THORIN_ENABLE_LLVM
@@ -271,6 +284,7 @@ DeviceBackends::DeviceBackends(thorin::World& world, int opt, bool debug, std::s
 #if THORIN_ENABLE_SPIRV
     register_backend(std::make_unique<OpenCLSPIRVBackend>(*this, world));
     register_backend(std::make_unique<LevelZeroSPIRVBackend>(*this, world));
+    register_backend(std::make_unique<VulkanSPIRVBackend>(*this, world));
 #endif
     register_backend(std::make_unique<HLSBackend>(*this, world, hls_flags));
 

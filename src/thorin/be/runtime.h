@@ -5,13 +5,14 @@
 namespace thorin {
 
 enum Platform {
-    CPU_PLATFORM,
-    CUDA_PLATFORM,
-    OPENCL_PLATFORM,
-    HSA_PLATFORM,
-    PAL_PLATFORM,
-    LEVEL_ZERO_PLATFORM,
-    SHADY_PLATFORM,
+    CPU_PLATFORM = 0,
+    CUDA_PLATFORM = 1,
+    OPENCL_PLATFORM = 2,
+    HSA_PLATFORM = 3,
+    PAL_PLATFORM = 4,
+    LEVEL_ZERO_PLATFORM = 5,
+    VULKAN_PLATFORM = 6,
+    SHADY_PLATFORM = 7,
 };
 
 enum KernelLaunchArgs {

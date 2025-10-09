@@ -3,7 +3,7 @@
 namespace thorin::spirv {
 
 struct SpirMathOps {
-#define THORIN_MATHOP(mathop_name) builder::ExtendedInstruction mathop_name;
+#define THORIN_MATHOP(mathop_name) std::optional<builder::ExtendedInstruction> mathop_name;
 #include "thorin/tables/mathoptable.h"
 #undef THORIN_MATHOP
 };
@@ -11,34 +11,61 @@ struct SpirMathOps {
 #include <spirv/unified1/OpenCL.std.h>
 
 SpirMathOps opencl_std = {
-    .fabs =     { "OpenCL.std", OpenCLLIB::Fabs },
-    .copysign = { "OpenCL.std", OpenCLLIB::Copysign },
-    .round =    { "OpenCL.std", OpenCLLIB::Round },
-    .floor =    { "OpenCL.std", OpenCLLIB::Floor },
-    .ceil =     { "OpenCL.std", OpenCLLIB::Ceil },
-    .fmin =     { "OpenCL.std", OpenCLLIB::Fmin },
-    .fmax =     { "OpenCL.std", OpenCLLIB::Fmax },
-    .cos =      { "OpenCL.std", OpenCLLIB::Cos },
-    .sin =      { "OpenCL.std", OpenCLLIB::Sin },
-    .tan =      { "OpenCL.std", OpenCLLIB::Tan },
-    .acos =     { "OpenCL.std", OpenCLLIB::Acos },
-    .asin =     { "OpenCL.std", OpenCLLIB::Asin },
-    .atan =     { "OpenCL.std", OpenCLLIB::Atan },
-    .atan2 =    { "OpenCL.std", OpenCLLIB::Atan2 },
-    .sqrt =     { "OpenCL.std", OpenCLLIB::Sqrt },
-    .cbrt =     { "OpenCL.std", OpenCLLIB::Cbrt },
-    .pow =      { "OpenCL.std", OpenCLLIB::Pow },
-    .exp =      { "OpenCL.std", OpenCLLIB::Exp },
-    .exp2 =     { "OpenCL.std", OpenCLLIB::Exp2 },
-    .log =      { "OpenCL.std", OpenCLLIB::Log },
-    .log2 =     { "OpenCL.std", OpenCLLIB::Log2 },
-    .log10 =    { "OpenCL.std", OpenCLLIB::Log10 },
+    .fabs =     {{ "OpenCL.std", OpenCLLIB::Fabs }},
+    .copysign = {{ "OpenCL.std", OpenCLLIB::Copysign }},
+    .round =    {{ "OpenCL.std", OpenCLLIB::Round }},
+    .floor =    {{ "OpenCL.std", OpenCLLIB::Floor }},
+    .ceil =     {{ "OpenCL.std", OpenCLLIB::Ceil }},
+    .fmin =     {{ "OpenCL.std", OpenCLLIB::Fmin }},
+    .fmax =     {{ "OpenCL.std", OpenCLLIB::Fmax }},
+    .cos =      {{ "OpenCL.std", OpenCLLIB::Cos }},
+    .sin =      {{ "OpenCL.std", OpenCLLIB::Sin }},
+    .tan =      {{ "OpenCL.std", OpenCLLIB::Tan }},
+    .acos =     {{ "OpenCL.std", OpenCLLIB::Acos }},
+    .asin =     {{ "OpenCL.std", OpenCLLIB::Asin }},
+    .atan =     {{ "OpenCL.std", OpenCLLIB::Atan }},
+    .atan2 =    {{ "OpenCL.std", OpenCLLIB::Atan2 }},
+    .sqrt =     {{ "OpenCL.std", OpenCLLIB::Sqrt }},
+    .cbrt =     {{ "OpenCL.std", OpenCLLIB::Cbrt }},
+    .pow =      {{ "OpenCL.std", OpenCLLIB::Pow }},
+    .exp =      {{ "OpenCL.std", OpenCLLIB::Exp }},
+    .exp2 =     {{ "OpenCL.std", OpenCLLIB::Exp2 }},
+    .log =      {{ "OpenCL.std", OpenCLLIB::Log }},
+    .log2 =     {{ "OpenCL.std", OpenCLLIB::Log2 }},
+    .log10 =    {{ "OpenCL.std", OpenCLLIB::Log10 }},
+};
+
+#include "spirv/unified1/GLSL.std.450.h"
+
+SpirMathOps glsl_std = {
+    .fabs =     {{ "GLSL.std.450", GLSLstd450::GLSLstd450FAbs }},
+    .copysign = { std::nullopt },
+    .round =    {{ "GLSL.std.450", GLSLstd450::GLSLstd450Round }},
+    .floor =    {{ "GLSL.std.450", GLSLstd450::GLSLstd450Floor }},
+    .ceil =     {{ "GLSL.std.450", GLSLstd450::GLSLstd450Ceil }},
+    .fmin =     {{ "GLSL.std.450", GLSLstd450::GLSLstd450FMin }},
+    .fmax =     {{ "GLSL.std.450", GLSLstd450::GLSLstd450FMax }},
+    .cos =      {{ "GLSL.std.450", GLSLstd450::GLSLstd450Cos }},
+    .sin =      {{ "GLSL.std.450", GLSLstd450::GLSLstd450Sin }},
+    .tan =      {{ "GLSL.std.450", GLSLstd450::GLSLstd450Tan }},
+    .acos =     {{ "GLSL.std.450", GLSLstd450::GLSLstd450Acos }},
+    .asin =     {{ "GLSL.std.450", GLSLstd450::GLSLstd450Asin }},
+    .atan =     {{ "GLSL.std.450", GLSLstd450::GLSLstd450Atan }},
+    .atan2 =    {{ "GLSL.std.450", GLSLstd450::GLSLstd450Atan2 }},
+    .sqrt =     {{ "GLSL.std.450", GLSLstd450::GLSLstd450Sqrt }},
+    .cbrt =     { std::nullopt },
+    .pow =      {{ "GLSL.std.450", GLSLstd450::GLSLstd450Pow }},
+    .exp =      {{ "GLSL.std.450", GLSLstd450::GLSLstd450Exp }},
+    .exp2 =     {{ "GLSL.std.450", GLSLstd450::GLSLstd450Exp2 }},
+    .log =      {{ "GLSL.std.450", GLSLstd450::GLSLstd450Log }},
+    .log2 =     {{ "GLSL.std.450", GLSLstd450::GLSLstd450Log2 }},
+    .log10 =    { std::nullopt },
 };
 
 Id CodeGen::emit_mathop(BasicBlockBuilder* bb, const thorin::MathOp& mathop) {
     auto type = mathop.type();
 
-    SpirMathOps& impl = opencl_std;
+    SpirMathOps* impl = target_info_.dialect == Target::Vulkan ? &glsl_std : &opencl_std;
     std::vector<Id> ops;
     for (auto& op : mathop.ops()) {
         ops.push_back(emit(op));
@@ -46,10 +73,13 @@ Id CodeGen::emit_mathop(BasicBlockBuilder* bb, const thorin::MathOp& mathop) {
 
     if (is_type_f(type)) {
         switch (mathop.mathop_tag()) {
-#define THORIN_MATHOP(mathop_name) case MathOp_##mathop_name: return bb->ext_instruction(convert(type).id, impl.mathop_name, ops);
+#define THORIN_MATHOP(mathop_name) case MathOp_##mathop_name: if (impl->mathop_name) return bb->ext_instruction(convert(type).id, *impl->mathop_name, ops); break;
 #include "thorin/tables/mathoptable.h"
         }
     }
+
+    world().ELOG("Unimplemented mathop: {}", mathop.name());
+    return 0;
 }
 
 std::tuple<spv::Scope, spv::MemorySemanticsMask> addrspace_atomics_params(World& world, AddrSpace as) {
@@ -74,11 +104,11 @@ std::vector<Id> CodeGen::emit_intrinsic(const App& app, const Continuation* intr
         return get_produced_types()[1];
     };
 
-    SpirMathOps& impl = opencl_std;
+    SpirMathOps* impl = target_info_.dialect == Target::Vulkan ? &glsl_std : &opencl_std;
     auto intrinsic_name = intrinsic->name();
 #define THORIN_MATHOP(mathop_name) \
     if ((#mathop_name) == intrinsic_name) { \
-        return { bb->ext_instruction(convert(get_produced_type()).id, impl.mathop_name, emit_args(app.args().skip_back())) }; \
+        return { bb->ext_instruction(convert(get_produced_type()).id, *impl->mathop_name, emit_args(app.args().skip_back())) }; \
     }
 #include "thorin/tables/mathoptable.h"
 
