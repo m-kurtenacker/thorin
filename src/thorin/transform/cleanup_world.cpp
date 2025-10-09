@@ -278,12 +278,21 @@ void Cleaner::clean_mem_ties() {
         if (continuation->has_body()) {
             if (auto body = continuation->body()->isa<App>()) {
                 auto mem_arg = continuation->body()->as<App>()->arg(0);
+
+                while (auto extract = mem_arg->isa<Extract>()) {
+                    mem_arg = extract->agg();
+                }
+
                 while (auto mem_op = mem_arg->isa<MemOp>()) {
                     if (const TieMem* tie = mem_op->isa<TieMem>()) {
                         mem_arg = tie->mem();
                         tie->replace_uses(mem_arg);
                     } else {
                         mem_arg = mem_op->mem();
+                    }
+
+                    while (auto extract = mem_arg->isa<Extract>()) {
+                        mem_arg = extract->agg();
                     }
                 }
             }
