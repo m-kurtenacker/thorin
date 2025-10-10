@@ -275,8 +275,11 @@ ConvertedType CodeGen::convert(const Type* type) {
                     max_serialized_size = converted_member_type.layout->size;
             }
 
-            if (max_serialized_size > 0) {
-                auto payload_type = world().definite_array_type(world().type_pu8(), max_serialized_size);
+            // round to 4
+            size_t payload_size_in_words = (max_serialized_size + 3) / 4;
+
+            if (payload_size_in_words > 0) {
+                auto payload_type = world().definite_array_type(world().type_pu32(), payload_size_in_words);
                 auto struct_t = world().struct_type(type->to_string(), 2);
                 struct_t->set_op(0, tag_type);
                 struct_t->set_op(1, payload_type);
