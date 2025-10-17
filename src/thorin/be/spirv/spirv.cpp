@@ -776,12 +776,9 @@ Id CodeGen::emit_bb(BasicBlockBuilder* bb, const Def* def) {
         Id index = bb->extract(convert(world().type_pu32()).id, value, { 0 });
         index = bb->convert(spv::OpUConvert, convert(world().type_pu64()).id, index);
         return index;
-    } else if (auto tuple = def->isa<Tuple>()) {
+    } else if (auto agg = def->isa<Aggregate>()) {
         scope_local_defs_.insert(def);
-        return emit_composite(bb, convert(tuple->type()).id, tuple->ops());
-    } else if (auto structagg = def->isa<StructAgg>()) {
-        scope_local_defs_.insert(def);
-        return emit_composite(bb, convert(structagg->type()).id, structagg->ops());
+        return emit_composite(bb, convert(agg->type()).id, agg->ops());
     } else if (auto access = def->isa<Access>()) {
         // emit dependent operations first
         emit_unsafe(access->mem());
