@@ -15,8 +15,6 @@ class NVVMCodeGen : public CodeGen {
 public:
     NVVMCodeGen(Thorin&, const Cont2Config&, int opt, bool debug); // NVVM-specific optimizations are run in the runtime
 
-    const char* file_ext() const override { return ".nvvm"; }
-
 protected:
     void emit_fun_decl_hook(Continuation*, llvm::Function*) override;
     llvm::FunctionType* convert_fn_type(Continuation*) override;

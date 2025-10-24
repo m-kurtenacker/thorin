@@ -45,7 +45,6 @@ public:
     llvm::Function* get(CodeGen& code_gen, const char* name);
     //@}
 
-    const char* file_ext() const override { return ".ll"; }
     void emit_stream(std::ostream& stream) override;
     // Note: This moves the context and module of the class,
     // rendering the current CodeGen object invalid.

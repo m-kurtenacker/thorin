@@ -111,6 +111,10 @@ struct CudaBackend : public Backend {
         std::string empty;
         return std::make_unique<c::CodeGen>(device_code_, kernel_configs_, c::Lang::CUDA, backends_.debug(), empty);
     }
+
+    std::string file_extension() override {
+        return ".cu";
+    }
 };
 
 struct OpenCLBackend : public Backend {
@@ -121,6 +125,10 @@ struct OpenCLBackend : public Backend {
     std::unique_ptr<CodeGen> create_cg() override {
         std::string empty;
         return std::make_unique<c::CodeGen>(device_code_, kernel_configs_, c::Lang::OpenCL, backends_.debug(), empty);
+    }
+
+    std::string file_extension() override {
+        return ".cl";
     }
 };
 
@@ -134,6 +142,10 @@ struct OpenCLSPIRVBackend : public Backend {
         spirv::Target target;
         return std::make_unique<spirv::CodeGen>(device_code_, target, backends_.debug(), &kernel_configs_);
     }
+
+    std::string file_extension() override {
+        return ".cl.spv";
+    }
 };
 
 struct LevelZeroSPIRVBackend : public Backend {
@@ -144,6 +156,10 @@ struct LevelZeroSPIRVBackend : public Backend {
     std::unique_ptr<CodeGen> create_cg() override {
         spirv::Target target;
         return std::make_unique<spirv::CodeGen>(device_code_, target, backends_.debug(), &kernel_configs_);
+    }
+
+    std::string file_extension() override {
+        return ".l0.spv";
     }
 };
 
@@ -158,6 +174,10 @@ struct VulkanSPIRVBackend : public Backend {
         target.dialect = spirv::Target::Vulkan;
         return std::make_unique<spirv::CodeGen>(device_code_, target, backends_.debug(), &kernel_configs_);
     }
+
+    std::string file_extension() override {
+        return ".vk.spv";
+    }
 };
 #endif
 
@@ -170,6 +190,10 @@ struct AMDHSABackend : public Backend {
     std::unique_ptr<CodeGen> create_cg() override {
         return std::make_unique<llvm::AMDGPUHSACodeGen>(device_code_, kernel_configs_, backends_.opt(), backends_.debug());
     }
+
+    std::string file_extension() override {
+        return ".amdgpu";
+    }
 };
 
 struct AMDPALBackend : public Backend {
@@ -180,6 +204,10 @@ struct AMDPALBackend : public Backend {
     std::unique_ptr<CodeGen> create_cg() override {
         return std::make_unique<llvm::AMDGPUPALCodeGen>(device_code_, kernel_configs_, backends_.opt(), backends_.debug());
     }
+
+    std::string file_extension() override {
+        return ".amdgpu";
+    }
 };
 
 struct NVVMBackend : public Backend {
@@ -189,6 +217,10 @@ struct NVVMBackend : public Backend {
 
     std::unique_ptr<CodeGen> create_cg() override {
         return std::make_unique<llvm::NVVMCodeGen>(device_code_, kernel_configs_, backends_.opt(), backends_.debug());
+    }
+
+    std::string file_extension() override {
+        return ".nvvm";
     }
 };
 #endif
@@ -238,6 +270,10 @@ struct HLSBackend : public Backend {
         return std::make_unique<c::CodeGen>(device_code_, kernel_configs_, c::Lang::HLS, backends_.debug(), hls_flags_);
     }
 
+    std::string file_extension() override {
+        return ".hls";
+    }
+
     std::string& hls_flags_;
 };
 
@@ -263,7 +299,6 @@ DeviceBackends::DeviceBackends(World& world, int opt, bool debug, std::string& h
             continue;
 
         backend->prepare_kernel_configs();
-        cgs.emplace_back(backend->create_cg());
     }
 }
 
@@ -279,11 +314,20 @@ void DeviceBackends::register_intrinsic(thorin::Intrinsic intrinsic, Backend& ba
     intrinsics_[intrinsic] = std::make_pair(&backend, f);
 }
 
-void DeviceBackends::register_kernel_for_offloading(const App* launch, Continuation* kernel) {
+std::tuple<std::string, std::string> DeviceBackends::register_kernel_for_offloading(const App* launch, Continuation* kernel) {
+    auto found = unique_kernel_.find(kernel);
+    if (found != unique_kernel_.end())
+        return found->second;
     Continuation* intrinsic_cont = launch->callee()->as_nom<Continuation>();
     auto handler = intrinsics_.find(intrinsic_cont->intrinsic());
     assert(handler != intrinsics_.end());
     auto [backend, get_config] = handler->second;
+
+    auto kernel_name = kernel->unique_name();
+    auto filename = world().name() + backend->file_extension();
+    auto r = std::make_tuple(filename, kernel_name);
+    kernel->set_name(kernel_name);
+    unique_kernel_[kernel] = r;
 
     // Import the continuation in the destination world
     Continuation* imported = backend->importer_->import(kernel)->as_nom<Continuation>();
@@ -291,9 +335,14 @@ void DeviceBackends::register_kernel_for_offloading(const App* launch, Continuat
     imported->world().make_external(imported);
     imported->attributes().cc = CC::C;
 
+    // remove kernel from main world
+    kernel->world().make_external(kernel);
+    kernel->destroy("codegen");
+
     // Obtain the kernel config now
     auto config = get_config(launch, kernel);
     backend->kernel_configs_[kernel] = std::move(config);
+    return r;
 }
 
 CodeGen::CodeGen(Thorin& thorin, bool debug)

@@ -13,7 +13,6 @@ public:
     virtual ~CodeGen() {}
 
     virtual void emit_stream(std::ostream& stream) = 0;
-    virtual const char* file_ext() const = 0;
 
     /// @name getters
     //@{
@@ -34,6 +33,7 @@ struct Backend {
     virtual ~Backend() = default;
 
     virtual std::unique_ptr<CodeGen> create_cg() = 0;
+    virtual std::string file_extension() = 0;
 
     Thorin& thorin() { return device_code_; }
     Importer& importer() { return *importer_; }
@@ -55,7 +55,9 @@ struct DeviceBackends {
     DeviceBackends(DeviceBackends&) = delete;
 
     World& world();
-    std::vector<std::unique_ptr<CodeGen>> cgs;
+    const std::vector<std::unique_ptr<Backend>>& backends() {
+        return backends_;
+    }
 
     int opt();
     bool debug();
@@ -64,11 +66,12 @@ struct DeviceBackends {
     using GetKernelConfigFn = std::function<std::unique_ptr<KernelConfig>(const App*, Continuation*)>;
     void register_intrinsic(Intrinsic, Backend&, GetKernelConfigFn);
 
-    void register_kernel_for_offloading(const App* launch, Continuation*);
+    std::tuple<std::string, std::string> register_kernel_for_offloading(const App* launch, Continuation*);
 private:
     World& world_;
     std::vector<std::unique_ptr<Backend>> backends_;
     std::unordered_map<Intrinsic, std::pair<Backend*, GetKernelConfigFn>> intrinsics_;
+    ContinuationMap<std::tuple<std::string, std::string>> unique_kernel_;
 
     int opt_;
     bool debug_;

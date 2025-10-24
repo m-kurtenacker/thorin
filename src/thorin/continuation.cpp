@@ -281,6 +281,7 @@ void Continuation::set_intrinsic() {
     else if (name() == "opencl_spirv")   attributes().intrinsic = Intrinsic::OpenCL_SPIRV;
     else if (name() == "levelzero")      attributes().intrinsic = Intrinsic::LevelZero_SPIRV;
     else if (name() == "vulkan_cs")      attributes().intrinsic = Intrinsic::VulkanCS_SPIRV;
+    else if (name() == "vulkan_offload") attributes().intrinsic = Intrinsic::VulkanOffload_SPIRV;
     else if (name() == "amdgpu_hsa")     attributes().intrinsic = Intrinsic::AMDGPUHSA;
     else if (name() == "amdgpu_pal")     attributes().intrinsic = Intrinsic::AMDGPUPAL;
     else if (name() == "hls")            attributes().intrinsic = Intrinsic::HLS;

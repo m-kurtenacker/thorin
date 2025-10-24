@@ -7,7 +7,6 @@ namespace thorin {
 struct RuntimeAPI {
     World& world_;
     DeviceBackends& backends_;
-    ContinuationMap<std::string> unique_kernel_names_;
 
     const Def* anydsl_alloc;
     const Def* anydsl_alloc_unified;
@@ -21,19 +20,6 @@ struct RuntimeAPI {
     const Def* anydsl_create_task;
     const Def* anydsl_create_edge;
     const Def* anydsl_execute_graph;
-
-    std::string register_kernel_for_offloading(const App* launch, Continuation* kernel) {
-        auto found = unique_kernel_names_.find(kernel);
-        if (found != unique_kernel_names_.end())
-            return found->second;
-        kernel->set_name(kernel->unique_name());
-        unique_kernel_names_[kernel] = kernel->name();
-        backends_.register_kernel_for_offloading(launch, kernel);
-
-        kernel->world().make_external(kernel);
-        kernel->destroy("codegen");
-        return kernel->name();
-    }
 
     RuntimeAPI(World& world, DeviceBackends& backends) : world_(world), backends_(backends) {
         auto get_api_fn = [&](Types dom, const Type* codom, std::string name) {
@@ -92,7 +78,7 @@ static bool contains_ptrtype(const Type* type) {
     }
 }
 
-void emit_host_code(RuntimeAPI& api, const App* launch, Platform platform, const std::string& ext, Continuation* continuation) {
+void emit_host_code(RuntimeAPI& api, const App* launch, Platform platform, Continuation* continuation) {
     World& world = continuation->world();
 
     assert(continuation->has_body());
@@ -116,8 +102,9 @@ void emit_host_code(RuntimeAPI& api, const App* launch, Platform platform, const
     auto kernel = body->arg(KernelLaunchArgs::Body)->as_nom<Continuation>();
 
     //auto kernel_name = builder.CreateGlobalString(kernel->name() == "hls_top" ? kernel->name() : kernel->name());
-    auto kernel_name = world.global_immutable_string(api.register_kernel_for_offloading(launch, kernel));
-    auto file_name = world.global_immutable_string(world.name() + ext);
+    auto [fn, kn] = api.backends_.register_kernel_for_offloading(launch, kernel);
+    auto file_name = world.global_immutable_string(fn);
+    auto kernel_name = world.global_immutable_string(kn);
     const size_t num_kernel_args = body->num_args() - KernelLaunchArgs::Num;
 
     auto ptr_ty = world.ptr_type(world.indefinite_array_type(world.type_qu8()));
@@ -391,14 +378,15 @@ void lower_offload_intrinsics(World& world, DeviceBackends& backends) {
         auto call = continuation->body();
         if (auto callee = call->callee()->isa<Continuation>()) {
             switch (callee->intrinsic()) {
-                case Intrinsic::CUDA:            emit_host_code(api, call, Platform::CUDA_PLATFORM,       ".cu",     continuation); break;
-                case Intrinsic::NVVM:            emit_host_code(api, call, Platform::CUDA_PLATFORM,       ".nvvm",   continuation); break;
-                case Intrinsic::OpenCL:          emit_host_code(api, call, Platform::OPENCL_PLATFORM,     ".cl",     continuation); break;
-                case Intrinsic::OpenCL_SPIRV:    emit_host_code(api, call, Platform::OPENCL_PLATFORM,     ".spv",    continuation); break;
-                case Intrinsic::LevelZero_SPIRV: emit_host_code(api, call, Platform::LEVEL_ZERO_PLATFORM, ".spv",    continuation); break;
-                case Intrinsic::AMDGPUHSA:       emit_host_code(api, call, Platform::HSA_PLATFORM,        ".amdgpu", continuation); break;
-                case Intrinsic::AMDGPUPAL:       emit_host_code(api, call, Platform::PAL_PLATFORM,        ".amdgpu", continuation); break;
-                case Intrinsic::VulkanCS_SPIRV:  emit_host_code(api, call, Platform::VULKAN_PLATFORM,     ".spv",    continuation); break;
+                case Intrinsic::CUDA:                emit_host_code(api, call, Platform::CUDA_PLATFORM,       continuation); break;
+                case Intrinsic::NVVM:                emit_host_code(api, call, Platform::CUDA_PLATFORM,       continuation); break;
+                case Intrinsic::OpenCL:              emit_host_code(api, call, Platform::OPENCL_PLATFORM,     continuation); break;
+                case Intrinsic::OpenCL_SPIRV:        emit_host_code(api, call, Platform::OPENCL_PLATFORM,     continuation); break;
+                case Intrinsic::LevelZero_SPIRV:     emit_host_code(api, call, Platform::LEVEL_ZERO_PLATFORM, continuation); break;
+                case Intrinsic::AMDGPUHSA:           emit_host_code(api, call, Platform::HSA_PLATFORM,        continuation); break;
+                case Intrinsic::AMDGPUPAL:           emit_host_code(api, call, Platform::PAL_PLATFORM,        continuation); break;
+                case Intrinsic::VulkanCS_SPIRV:      emit_host_code(api, call, Platform::VULKAN_PLATFORM,     continuation); break;
+                case Intrinsic::VulkanOffload_SPIRV: emit_vulkan_offload(api, continuation); break;
 
                 case Intrinsic::Parallel:        emit_parallel(api, continuation); break;
                 case Intrinsic::Fibers:          emit_fibers(api, continuation);   break;

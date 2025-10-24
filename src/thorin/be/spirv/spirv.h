@@ -51,7 +51,6 @@ public:
     CodeGen(Thorin& thorin, Target&, bool debug, const Cont2Config* = nullptr);
 
     void emit_stream(std::ostream& stream) override;
-    const char* file_ext() const override { return ".spv"; }
 
     bool is_valid(Id id) {
         return id > 0;
