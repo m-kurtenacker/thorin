@@ -12,7 +12,6 @@ enum Platform {
     PAL_PLATFORM = 4,
     LEVEL_ZERO_PLATFORM = 5,
     VULKAN_PLATFORM = 6,
-    SHADY_PLATFORM = 7,
 };
 
 enum KernelLaunchArgs {
