@@ -73,7 +73,7 @@ static uint64_t get_alloc_size(const Def* def) {
     return size ? static_cast<uint64_t>(size->value().get_qu64()) : 0_u64;
 }
 
-static std::unique_ptr<GPUKernelConfig> get_gpu_kernel_config(const App* app, Continuation* /* imported */) {
+std::unique_ptr<KernelConfig> get_compute_kernel_config(const App* app, Continuation* /* imported */) {
     // determine whether or not this kernel uses restrict pointers
     bool has_restrict = true;
     DefSet allocs;
@@ -104,7 +104,7 @@ Backend::Backend(thorin::DeviceBackends& backends, World& src) : backends_(backe
 
 struct CudaBackend : public Backend {
     explicit CudaBackend(DeviceBackends& b, World& src) : Backend(b, src) {
-        b.register_intrinsic(Intrinsic::CUDA, *this, get_gpu_kernel_config);
+        b.register_intrinsic(Intrinsic::CUDA, *this);
     }
 
     std::unique_ptr<CodeGen> create_cg() override {
@@ -119,7 +119,7 @@ struct CudaBackend : public Backend {
 
 struct OpenCLBackend : public Backend {
     explicit OpenCLBackend(DeviceBackends& b, World& src) : Backend(b, src) {
-        b.register_intrinsic(Intrinsic::OpenCL, *this, get_gpu_kernel_config);
+        b.register_intrinsic(Intrinsic::OpenCL, *this);
     }
 
     std::unique_ptr<CodeGen> create_cg() override {
@@ -135,7 +135,7 @@ struct OpenCLBackend : public Backend {
 #if THORIN_ENABLE_SPIRV
 struct OpenCLSPIRVBackend : public Backend {
     explicit OpenCLSPIRVBackend(DeviceBackends& b, World& src) : Backend(b, src) {
-        b.register_intrinsic(Intrinsic::OpenCL_SPIRV, *this, get_gpu_kernel_config);
+        b.register_intrinsic(Intrinsic::OpenCL_SPIRV, *this);
     }
 
     std::unique_ptr<CodeGen> create_cg() override {
@@ -150,7 +150,7 @@ struct OpenCLSPIRVBackend : public Backend {
 
 struct LevelZeroSPIRVBackend : public Backend {
     explicit LevelZeroSPIRVBackend(DeviceBackends& b, World& src) : Backend(b, src) {
-        b.register_intrinsic(Intrinsic::LevelZero_SPIRV, *this, get_gpu_kernel_config);
+        b.register_intrinsic(Intrinsic::LevelZero_SPIRV, *this);
     }
 
     std::unique_ptr<CodeGen> create_cg() override {
@@ -165,7 +165,8 @@ struct LevelZeroSPIRVBackend : public Backend {
 
 struct VulkanSPIRVBackend : public Backend {
     explicit VulkanSPIRVBackend(DeviceBackends& b, World& src) : Backend(b, src) {
-        b.register_intrinsic(Intrinsic::VulkanCS_SPIRV, *this, get_gpu_kernel_config);
+        b.register_intrinsic(Intrinsic::VulkanCS_SPIRV, *this);
+        b.register_intrinsic(Intrinsic::VulkanOffload_SPIRV, *this);
     }
 
     std::unique_ptr<CodeGen> create_cg() override {
@@ -184,7 +185,7 @@ struct VulkanSPIRVBackend : public Backend {
 #if THORIN_ENABLE_LLVM
 struct AMDHSABackend : public Backend {
     explicit AMDHSABackend(DeviceBackends& b, World& src) : Backend(b, src) {
-        b.register_intrinsic(Intrinsic::AMDGPUHSA, *this, get_gpu_kernel_config);
+        b.register_intrinsic(Intrinsic::AMDGPUHSA, *this);
     }
 
     std::unique_ptr<CodeGen> create_cg() override {
@@ -198,7 +199,7 @@ struct AMDHSABackend : public Backend {
 
 struct AMDPALBackend : public Backend {
     explicit AMDPALBackend(DeviceBackends& b, World& src) : Backend(b, src) {
-        b.register_intrinsic(Intrinsic::AMDGPUPAL, *this, get_gpu_kernel_config);
+        b.register_intrinsic(Intrinsic::AMDGPUPAL, *this);
     }
 
     std::unique_ptr<CodeGen> create_cg() override {
@@ -212,7 +213,7 @@ struct AMDPALBackend : public Backend {
 
 struct NVVMBackend : public Backend {
     explicit NVVMBackend(DeviceBackends& b, World& src) : Backend(b, src) {
-        b.register_intrinsic(Intrinsic::NVVM, *this, get_gpu_kernel_config);
+        b.register_intrinsic(Intrinsic::NVVM, *this);
     }
 
     std::unique_ptr<CodeGen> create_cg() override {
@@ -227,36 +228,7 @@ struct NVVMBackend : public Backend {
 
 struct HLSBackend : public Backend {
     explicit HLSBackend(DeviceBackends& b, World& src, std::string& hls_flags) : Backend(b, src), hls_flags_(hls_flags) {
-        b.register_intrinsic(Intrinsic::HLS, *this, [&](const App* app, Continuation* kernel) {
-            HLSKernelConfig::Param2Size param_sizes;
-            for (size_t i = hls_free_vars_offset, e = app->num_args(); i != e; ++i) {
-                auto arg = app->arg(i);
-                auto ptr_type = arg->type()->isa<PtrType>();
-                if (!ptr_type) continue;
-                auto size = get_alloc_size(arg);
-                if (size == 0)
-                    b.world().edef(arg, "array size is not known at compile time");
-                auto elem_type = ptr_type->pointee();
-                size_t multiplier = 1;
-                if (!elem_type->isa<PrimType>()) {
-                    if (auto array_type = elem_type->isa<ArrayType>())
-                        elem_type = array_type->elem_type();
-                }
-                if (!elem_type->isa<PrimType>()) {
-                    if (auto def_array_type = elem_type->isa<DefiniteArrayType>()) {
-                        elem_type = def_array_type->elem_type();
-                        multiplier = def_array_type->dim();
-                    }
-                }
-                auto prim_type = elem_type->isa<PrimType>();
-                if (!prim_type)
-                    b.world().edef(arg, "only pointers to arrays of primitive types are supported");
-                auto num_elems = size / (multiplier * num_bits(prim_type->primtype_tag()) / 8);
-                // imported has type: fn (mem, fn (mem), ...)
-                param_sizes.emplace(kernel->param(i - hls_free_vars_offset + 2), num_elems);
-            }
-            return std::make_unique<HLSKernelConfig>(param_sizes);
-        });
+        b.register_intrinsic(Intrinsic::HLS, *this);
     }
 
     std::unique_ptr<CodeGen> create_cg() override {
@@ -276,6 +248,38 @@ struct HLSBackend : public Backend {
 
     std::string& hls_flags_;
 };
+
+std::unique_ptr<KernelConfig> get_hls_kernel_config(const App* app, Continuation* kernel) {
+    World& world = app->world();
+    HLSKernelConfig::Param2Size param_sizes;
+    for (size_t i = hls_free_vars_offset, e = app->num_args(); i != e; ++i) {
+        auto arg = app->arg(i);
+        auto ptr_type = arg->type()->isa<PtrType>();
+        if (!ptr_type) continue;
+        auto size = get_alloc_size(arg);
+        if (size == 0)
+            world.edef(arg, "array size is not known at compile time");
+        auto elem_type = ptr_type->pointee();
+        size_t multiplier = 1;
+        if (!elem_type->isa<PrimType>()) {
+            if (auto array_type = elem_type->isa<ArrayType>())
+                elem_type = array_type->elem_type();
+        }
+        if (!elem_type->isa<PrimType>()) {
+            if (auto def_array_type = elem_type->isa<DefiniteArrayType>()) {
+                elem_type = def_array_type->elem_type();
+                multiplier = def_array_type->dim();
+            }
+        }
+        auto prim_type = elem_type->isa<PrimType>();
+        if (!prim_type)
+            world.edef(arg, "only pointers to arrays of primitive types are supported");
+        auto num_elems = size / (multiplier * num_bits(prim_type->primtype_tag()) / 8);
+        // imported has type: fn (mem, fn (mem), ...)
+        param_sizes.emplace(kernel->param(i - hls_free_vars_offset + 2), num_elems);
+    }
+    return std::make_unique<HLSKernelConfig>(param_sizes);
+}
 
 DeviceBackends::DeviceBackends(World& world, int opt, bool debug, std::string& hls_flags) : world_(world), opt_(opt), debug_(debug) {
     register_backend(std::make_unique<CudaBackend>(*this, world_));
@@ -310,18 +314,18 @@ World& DeviceBackends::world() { return world_; }
 bool DeviceBackends::debug() { return debug_; }
 int DeviceBackends::opt() { return opt_; }
 
-void DeviceBackends::register_intrinsic(thorin::Intrinsic intrinsic, Backend& backend, GetKernelConfigFn f) {
-    intrinsics_[intrinsic] = std::make_pair(&backend, f);
+void DeviceBackends::register_intrinsic(thorin::Intrinsic intrinsic, Backend& backend) {
+    intrinsics_[intrinsic] = &backend;
 }
 
-std::tuple<std::string, std::string> DeviceBackends::register_kernel_for_offloading(const App* launch, Continuation* kernel) {
+std::tuple<std::string, std::string> DeviceBackends::register_kernel_for_offloading(const App* launch, Continuation* kernel, std::unique_ptr<KernelConfig> config) {
     auto found = unique_kernel_.find(kernel);
     if (found != unique_kernel_.end())
         return found->second;
     Continuation* intrinsic_cont = launch->callee()->as_nom<Continuation>();
     auto handler = intrinsics_.find(intrinsic_cont->intrinsic());
     assert(handler != intrinsics_.end());
-    auto [backend, get_config] = handler->second;
+    auto backend = handler->second;
 
     auto kernel_name = kernel->unique_name();
     auto filename = world().name() + backend->file_extension();
@@ -339,8 +343,6 @@ std::tuple<std::string, std::string> DeviceBackends::register_kernel_for_offload
     kernel->world().make_external(kernel);
     kernel->destroy("codegen");
 
-    // Obtain the kernel config now
-    auto config = get_config(launch, kernel);
     backend->kernel_configs_[kernel] = std::move(config);
     return r;
 }

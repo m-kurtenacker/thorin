@@ -143,23 +143,28 @@ void CodeGen::emit_stream(std::ostream& out) {
     int entry_points_count = 0;
     for (auto& cont : world().copy_continuations()) {
         if (cont->is_exported() && kernel_config_) {
-            auto config = kernel_config_->find(cont);
-            if (config == kernel_config_->end())
+            auto found = kernel_config_->find(cont);
+            if (found == kernel_config_->end())
                 continue;
 
             assert(defs_.contains(cont));
             Id callee = defs_[cont];
 
-            auto block = config->second->as<GPUKernelConfig>()->block_size();
-            std::vector<uint32_t> local_size = {
-                    (uint32_t) std::get<0>(block),
-                    (uint32_t) std::get<1>(block),
-                    (uint32_t) std::get<2>(block),
-            };
+            if (auto gpu_kernel_config = found->second->isa<GPUKernelConfig>()) {
+                auto block = gpu_kernel_config->block_size();
+                    std::vector<uint32_t> local_size = {
+                        (uint32_t) std::get<0>(block),
+                        (uint32_t) std::get<1>(block),
+                        (uint32_t) std::get<2>(block),
+                };
 
-            builder_->declare_entry_point(target_info_.dialect == Target::Vulkan ? spv::ExecutionModelGLCompute : spv::ExecutionModelKernel, callee, cont->name().c_str(), builder.interface);
-            builder_->execution_mode(callee, spv::ExecutionModeLocalSize, local_size);
-            entry_points_count++;
+                builder_->declare_entry_point(target_info_.dialect == Target::Vulkan ? spv::ExecutionModelGLCompute : spv::ExecutionModelKernel, callee, cont->name().c_str(), builder.interface);
+                builder_->execution_mode(callee, spv::ExecutionModeLocalSize, local_size);
+                entry_points_count++;
+            } else if (auto shader = found->second->isa<ShaderKernelConfig>()) {
+                builder_->declare_entry_point(static_cast<spv::ExecutionModel>(shader->execution_model_), callee, cont->name().c_str(), builder.interface);
+                entry_points_count++;
+            }
         }
     }
 

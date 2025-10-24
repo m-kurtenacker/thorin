@@ -46,6 +46,13 @@ private:
     Param2Size param_sizes_;
 };
 
+#ifdef THORIN_ENABLE_SPIRV
+#include "spirv/unified1/spirv.h"
+struct ShaderKernelConfig : public KernelConfig {
+    SpvExecutionModel execution_model_;
+};
+#endif
+
 }
 
 #endif
