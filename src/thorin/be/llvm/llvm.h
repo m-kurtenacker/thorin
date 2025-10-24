@@ -133,6 +133,7 @@ protected:
     llvm::DIScope* discope_ = nullptr;
     bool has_alloca_;
     std::vector<llvm::CallInst*> potential_tailcalls_;
+    std::unique_ptr<llvm::Module> runtime_;
 #if THORIN_ENABLE_RV
     std::vector<std::tuple<u32, llvm::Function*, llvm::CallInst*>> vec_todo_;
 #endif
