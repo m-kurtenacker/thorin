@@ -242,15 +242,12 @@ struct ClosureConverter {
         std::vector<const Type*> nparam_types;
 
         bool is_accelerator = ocont->is_accelerator();
-        bool acc_body_found = false;
         for (auto pt : ocont->type()->types()) {
             const Type* npt = rewriter.instantiate(pt)->as<Type>();
-            // in intrinsics, don't closure-convert immediate parameters
-            if (ocont->is_intrinsic() && (!is_accelerator || !acc_body_found)) {
+            // in intrinsics, don't closure-convert parameters
+            if (ocont->is_intrinsic()) {
                 if (pt->tag() == Node_FnType) {
                     npt = dst().fn_type(npt->as<FnType>()->types());
-                    if (is_accelerator)
-                        acc_body_found = true;
                 } else if (auto tuple_t = pt->isa<TupleType>(); tuple_t && tuple_t->types().size() == 2) {
                     // this is because of how we encode match() ...
                     if (tuple_t->types()[1]->tag() == Node_FnType) {
@@ -456,6 +453,7 @@ const Def* ClosureConverter::ScopeRewriter::rewrite(const Def* const odef) {
         assert(false);
     } else if (auto app = odef->isa<App>()) {
         auto ncallee = instantiate(app->callee());
+        auto ncont = ncallee->isa_nom<Continuation>();
 
         std::vector<const Def*> nargs;
         nargs.resize(app->num_args());
@@ -463,10 +461,15 @@ const Def* ClosureConverter::ScopeRewriter::rewrite(const Def* const odef) {
         auto ret_param_i = app->callee_type()->ret_param_index();
         for (size_t i = 0; i < app->num_args(); i++) {
             auto oarg = app->arg(i);
+            // do not convert accelerator kernels
+            if (ncont && ncont->is_accelerator()) {
+                if (oarg->type()->isa<FnType>() && !oarg->type()->isa<ReturnType>())
+                    continue;
+            }
             nargs[i] = instantiate(oarg);
 
             if (auto ocont = oarg->isa_nom<Continuation>()) {
-                // if we're passing something that wasn't convertible to
+                // if we're passing something that wasn't convertible, wrap it
                 if (!is_closure_convertible(ocont) && ncallee->type()->as<FnType>()->types()[i]->tag() != Node_FnType) {
                     auto ncont = nargs[i]->isa<Continuation>();
                     assert(ncont);
@@ -493,90 +496,107 @@ const Def* ClosureConverter::ScopeRewriter::rewrite(const Def* const odef) {
             }
         }
 
-        if (auto ncont = ncallee->isa_nom<Continuation>()) {
-            size_t kernel_i = SIZE_MAX;
-            Continuation* old_body = nullptr;
-
+        if (ncont) {
             if (ncont->is_accelerator()) {
-                // there is unfortunately no standardisation on which parameter is the body parameter for accelerators
-                // so we're going to play games here: let's assume only one body is a returning continuation
-                // TODO: make accelerator signatures more consistent
-                auto dom = ncont->type()->domain();
-                for (size_t i = 0; i < dom.size(); i++) {
-                    if (auto fnt = dom[i]->isa<FnType>(); fnt && fnt->is_returning()) {
-                        assert(kernel_i == SIZE_MAX);
-                        kernel_i = i;
-                        old_body = app->arg(i)->as_nom<Continuation>();
+                // we're going to change the type of the accelarator ofc
+                std::vector<const Type*> nintrinsic_types;
+                for (auto t : ncont->type()->copy_types())
+                    nintrinsic_types.push_back(t);
+
+                struct {
+                    World& world;
+                    DefMap<int> map;
+                    std::vector<const Def*> lifted_args;
+                    std::vector<const Type*> env_types;
+                    size_t count = 0;
+
+                    const Def* flatten(const Def* def, Continuation* wrapper) {
+                        auto t = def->type();
+
+                        if (auto tuple_t = t->isa<TupleType>()) {
+                            std::vector<const Def*> ops;
+                            for (size_t i = 0; i < tuple_t->num_ops(); i++)
+                                ops.push_back(flatten(world.extract(def, i), wrapper));
+                            if (!wrapper)
+                                return nullptr;
+                            return world.tuple(ops);
+                        } else if (auto struct_t = t->isa<StructType>()) {
+                            std::vector<const Def*> ops;
+                            for (size_t i = 0; i < struct_t->num_ops(); i++)
+                                ops.push_back(flatten(world.extract(def, i), wrapper));
+                            if (!wrapper)
+                                return nullptr;
+                            return world.struct_agg(struct_t, ops);
+                        } else if (auto closure_t = t->isa<ClosureType>()) {
+                            world.ELOG("Closures cannot be captured in kernels for now.");
+                            abort();
+                        } else {
+                            auto found = map.find(def);
+                            if (found != map.end()) {
+                                if (!wrapper)
+                                    return nullptr;
+                                return wrapper->param(2 + found->second);
+                            }
+                            assert(!wrapper);
+                            if (!wrapper) {
+                                env_types.push_back(t);
+                                lifted_args.push_back(def);
+                                map[def] = count++;
+                                return nullptr;
+                            }
+                            //auto env_param = wrapper->append_param(t);
+                            //nargs->push_back(def);
+                            //return env_param;
+                        }
+                    }
+                } flattener = { dst() };
+
+                // iterate over the kernels and register params for them
+                for (size_t i = 0; i < ncont->num_params(); i++) {
+                    if (!nargs[i]) {
+                        auto okernel = app->arg(i)->as_nom<Continuation>();
+                        for (auto ofv : converter_.lookup(okernel).free_vars) {
+                            auto fv = instantiate(ofv);
+                            flattener.flatten(fv, nullptr);
+                        }
                     }
                 }
-                assert(kernel_i != SIZE_MAX);
-                assert(old_body);
-            }
 
-            if (ncont->is_intrinsic()) {
-                for (size_t i = 0; i < app->num_args(); i++) {
-                    // function arguments to accelerators have to be left alone,
-                    // but it's easier to let them be closure converted and undo it by lambda lifting
-                    // and dropping the closure inside the wrapper
-                    if (i == kernel_i) if (auto closure = nargs[kernel_i]->isa<Closure>()) {
-                        auto& free_vars = converter_.lookup(old_body).free_vars;
-                        Array<const Type*> instantiated_free_vars = Array<const Type*>(free_vars.size(), [&](const int i) -> const Type* {
-                            return instantiate(free_vars[i]->type())->as<Type>();
-                        });
+                // we add them once to the call
+                for (auto env : flattener.lifted_args) {
+                    nintrinsic_types.push_back(env->type());
+                    nargs.push_back(env);
+                }
 
-                        auto kernel_wrapper = dst().continuation(ncallee->type()->as<FnType>()->domain()[kernel_i]->as<FnType>());
+                for (size_t i = 0; i < ncont->num_params(); i++) {
+                    if (!nargs[i]) {
+                        auto old_kernel = app->arg(i)->as_nom<Continuation>();
 
-                        // patch the callee - make up a new intrinsic that matches the kernel wrapper signature !
-                        std::vector<const Type*> nintrinsic_types;
-                        for (auto t : ncont->type()->copy_types())
-                            nintrinsic_types.push_back(t);
+                        ScopeRewriter* body_rewriter;
+                        auto& scope = converter_.forest_.get_scope(old_kernel);
+                        children_.emplace_back(std::make_unique<ScopeRewriter>(converter_, &scope, this));
+                        body_rewriter = children_.back().get();
 
-                        auto inner_closure = dst().closure(closure->type(), closure->debug());
-                        inner_closure->set_fn(closure->fn(), closure->self_param());
+                        Continuation* wrapper = dst().continuation(dst().fn_type({dst().mem_type(), dst().return_type({dst().mem_type()})}));
+                        for (auto env_t : flattener.env_types)
+                            wrapper->append_param(env_t);
 
-                        // TODO: get rid of this when flatten_tuples handles this case
-                        struct {
-                            World& world;
-                            Continuation* wrapper;
-                            std::vector<const Def*>& nargs;
-                            std::vector<const Type*>& nintrinsic_types;
-                            int count = 0;
+                        for (auto ofv : converter_.lookup(old_kernel).free_vars) {
+                            auto fv = instantiate(ofv);
+                            auto inner = flattener.flatten(fv, wrapper);
+                            body_rewriter->insert(ofv, inner);
+                        }
 
-                            const Def* flatten(const Def* def) {
-                                auto t = def->type();
+                        wrapper->jump(body_rewriter->rewrite(old_kernel), { wrapper->mem_param(), wrapper->ret_param() });
 
-                                if (auto tuple_t = t->isa<TupleType>()) {
-                                    std::vector<const Def*> ops;
-                                    for (size_t i = 0; i < tuple_t->num_ops(); i++)
-                                        ops.push_back(flatten(world.extract(def, i)));
-                                    return world.tuple(ops);
-                                } else if (auto struct_t = t->isa<StructType>()) {
-                                    std::vector<const Def*> ops;
-                                    for (size_t i = 0; i < struct_t->num_ops(); i++)
-                                        ops.push_back(flatten(world.extract(def, i)));
-                                    return world.struct_agg(struct_t, ops);
-                                } else if (auto closure = t->isa<ClosureType>()) {
-                                    world.ELOG("Closures cannot be captured in kernels for now.");
-                                    abort();
-                                } else {
-                                    auto env_param = wrapper->append_param(t);
-                                    count++;
-                                    nargs.push_back(def);
-                                    nintrinsic_types.push_back(t);
-                                    return env_param;
-                                }
-                            }
-                        } flattener = { dst(), kernel_wrapper, nargs, nintrinsic_types };
-                        inner_closure->set_env(flattener.flatten(closure->env()));
-
-                            kernel_wrapper->jump(inner_closure, kernel_wrapper->params_as_defs().skip_back(flattener.count));
-                        nargs[kernel_i] = kernel_wrapper;
-                        nintrinsic_types[kernel_i] = kernel_wrapper->type();
-                        auto nintrinsic = dst().continuation(dst().fn_type(nintrinsic_types), ncont->attributes(),ncont->debug());
-                        ncallee = nintrinsic;
-                        continue;
+                        nargs[i] = wrapper;
+                        nintrinsic_types[i] = wrapper->type();
                     }
-
+                }
+                auto nintrinsic = dst().continuation(dst().fn_type(nintrinsic_types), ncont->attributes(),ncont->debug());
+                ncallee = nintrinsic;
+            } else if (ncont->is_intrinsic()) {
+                for (size_t i = 0; i < app->num_args(); i++) {
                     // ensure the BB arguments to intrinsics such as branch and match are left as continuations
                     auto pt = ncont->type()->types()[i];
                     if (pt->tag() == Node_FnType)
