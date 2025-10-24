@@ -131,6 +131,24 @@ std::vector<Id> CodeGen::emit_intrinsic(const App& app, const Continuation* intr
         builder_->extension("SPV_KHR_non_semantic_info");
         bb->ext_instruction(convert(world().unit_type()).id, { "NonSemantic.DebugPrintf", 1}, args);
         return {};
+    } else if (intrinsic->name() == "spirv.global") {
+        std::vector<Id> productions;
+        auto desired_type = get_produced_type()->as<PtrType>();
+        auto id = builder_->global_variable(convert(desired_type).id, static_cast<spv::StorageClass>(convert(desired_type->addr_space())));
+        builder_->interface.push_back(id);
+        productions.push_back(id);
+        return productions;
+    } else if (intrinsic->name() == "spirv.decorate") {
+        std::vector<Id> productions;
+        if (auto decoration_lit = app.arg(2)->isa<PrimLit>()) {
+            auto decoration = decoration_lit->value().get_u32();
+            auto id = emit(app.arg(1));
+            if (auto extra_lit = app.arg(2)->isa<PrimLit>()) {
+                builder_->decorate(id, static_cast<spv::Decoration>(decoration), { extra_lit->value().get_u32() });
+                return productions;
+            }
+        }
+        world().ELOG("spirv.decorate requires an integer literal as the argument");
     } else if (intrinsic->name() == "spirv.builtin") {
         std::vector<Id> productions;
         if (auto spv_builtin_lit = app.arg(1)->isa<PrimLit>()) {
