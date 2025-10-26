@@ -37,7 +37,7 @@ struct RuntimeAPI {
 
         auto i32 = world.type_qs32();
         auto i64 = world.type_qs64();
-        auto ptr_ty = world.ptr_type(world.indefinite_array_type(world.type_qu8()));
+        auto ptr_ty = world.ptr_type(world.indefinite_array_type(world.type_pu8()));
 
         anydsl_alloc = get_api_fn({ i32, i64 }, ptr_ty, "anydsl_alloc");
         anydsl_alloc_unified = get_api_fn({ i32, i64 }, ptr_ty, "anydsl_alloc_unified");
@@ -107,7 +107,7 @@ void emit_host_code(RuntimeAPI& api, const App* launch, Platform platform, Conti
     auto kernel_name = world.global_immutable_string(kn);
     const size_t num_kernel_args = body->num_args() - KernelLaunchArgs::Num;
 
-    auto ptr_ty = world.ptr_type(world.indefinite_array_type(world.type_qu8()));
+    auto ptr_ty = world.ptr_type(world.indefinite_array_type(world.type_pu8()));
 
     auto alloc = [&](const Type* t, std::string name) {
         auto a = world.alloc(t, mem, { name });
@@ -124,7 +124,7 @@ void emit_host_code(RuntimeAPI& api, const App* launch, Platform platform, Conti
     const Def* sizes  = alloc(world.definite_array_type(world.type_pu32(), num_kernel_args), "sizes");
     const Def* aligns = alloc(world.definite_array_type(world.type_pu32(), num_kernel_args), "aligns");
     const Def* allocs = alloc(world.definite_array_type(world.type_pu32(), num_kernel_args), "allocs");
-    const Def* types  = alloc(world.definite_array_type(world.type_qu8(),  num_kernel_args), "types");
+    const Def* types  = alloc(world.definite_array_type(world.type_pu8(),  num_kernel_args), "types");
 
     // fill array of arguments
     for (size_t i = 0; i < num_kernel_args; ++i) {
@@ -187,7 +187,7 @@ void emit_host_code(RuntimeAPI& api, const App* launch, Platform platform, Conti
         store(size, size_ptr);
         store(world.align_of(target_arg->type()), align_ptr);
         store(world.size_of(target_arg->type()), alloc_ptr);
-        store(world.literal_qu8((uint8_t)arg_type, {}), type_ptr);
+        store(world.literal_pu8((uint8_t)arg_type, {}), type_ptr);
     }
 
     // allocate arrays for the grid and block size
@@ -247,7 +247,7 @@ std::tuple<const Def*, Array<const Def*>> spill(const Def*& mem, const Defs& arg
         restored.push_back(world.extract(l, 1));
     }
 
-    auto ptr_ty = world.ptr_type(world.indefinite_array_type(world.type_qu8()));
+    auto ptr_ty = world.ptr_type(world.indefinite_array_type(world.type_pu8()));
     return std::make_tuple(world.bitcast(ptr_ty, spill_alloca), restored);
 }
 
@@ -263,7 +263,7 @@ enum class RuntimeParallelForArgs {
 
 void emit_parallel(RuntimeAPI& api, Continuation* continuation) {
     World& world = continuation->world();
-    auto ptr_ty = world.ptr_type(world.indefinite_array_type(world.type_qu8()));
+    auto ptr_ty = world.ptr_type(world.indefinite_array_type(world.type_pu8()));
 
     assert(continuation->has_body());
     auto body = continuation->body();
@@ -312,7 +312,7 @@ enum class RuntimeSpawnFibersArgs {
 
 void emit_fibers(RuntimeAPI& api, Continuation* continuation) {
     World& world = continuation->world();
-    auto ptr_ty = world.ptr_type(world.type_qu8());
+    auto ptr_ty = world.ptr_type(world.type_pu8());
     auto i32 = world.type_qs32();
 
     assert(continuation->has_body());
@@ -342,7 +342,7 @@ enum class RuntimeSpawnThreadArgs {
 
 void emit_spawn(RuntimeAPI& api, Continuation* continuation) {
     World& world = continuation->world();
-    auto ptr_ty = world.ptr_type(world.indefinite_array_type(world.type_qu8()));
+    auto ptr_ty = world.ptr_type(world.indefinite_array_type(world.type_pu8()));
 
     assert(continuation->has_body());
     auto body = continuation->body();
