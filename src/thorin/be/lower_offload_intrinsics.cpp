@@ -370,24 +370,66 @@ void emit_sync(RuntimeAPI& api, Continuation* continuation) {
     continuation->set_body(world.app(api.anydsl_sync_thread, {mem, id, ret}));
 }
 
+auto build_setup_args_fn(World& world, ArrayRef<const Def*> args) {
+    auto ptr_ty = world.ptr_type(world.indefinite_array_type(world.type_pu8()));
+    auto callback_fn_t = world.closure_type({world.mem_type(), world.type_qs32(), world.ptr_type(
+            world.indefinite_array_type(ptr_ty)), world.return_type({world.mem_type()})});
+    Continuation* setup_args_fn = world.continuation(
+            world.fn_type({world.mem_type(), callback_fn_t, world.return_type({world.mem_type()})}));
+    const Def* mem = setup_args_fn->mem_param();
+    auto callback = setup_args_fn->param(1);
+    auto alloc = [&](const Type* t) {
+        auto r = world.alloc(t, mem);
+        mem = world.extract(r, static_cast<uint32_t>(0));
+        return world.extract(r, static_cast<uint32_t>(1));
+    };
+    auto pointers = alloc(world.definite_array_type(ptr_ty, args.size()));
+    for (size_t i = 0; i < args.size(); i++) {
+        auto arg_on_stack = alloc(args[i]->type());
+        mem = world.store(mem, arg_on_stack, args[i]);
+        mem = world.store(mem, world.lea(pointers, world.literal_pu32(i, {}), {}), world.bitcast(ptr_ty, arg_on_stack));
+    }
+    setup_args_fn->set_body(world.app(callback, { mem, world.literal_qs32(args.size(), {}), world.bitcast(callback_fn_t->types()[2], pointers), setup_args_fn->ret_param() }));
+    // setup function has to be a closure
+    auto dummy_closure = world.closure(world.closure_type(setup_args_fn->type()->types()));
+    auto dummy_index = setup_args_fn->append_param(dummy_closure->type())->index();
+    dummy_closure->set_fn(setup_args_fn, dummy_index);
+    dummy_closure->set_env(world.tuple({}));
+    return dummy_closure;
+};
+
 #ifdef THORIN_ENABLE_SPIRV
 void emit_vulkan_offload(RuntimeAPI& api, Continuation* continuation) {
     World& world = continuation->world();
+    auto ptr_ty = world.ptr_type(world.indefinite_array_type(world.type_pu8()));
 
     assert(continuation->has_body());
     auto body = continuation->body();
     const Def* mem = body->arg(0);
     auto ret = body->ret_arg();
 
-    for (size_t i = 1; i < body->num_args() - 1; i+=2) {
-        auto shader_type = body->arg(i + 0);
-        auto shader_code = body->arg(i + 1)->as_nom<Continuation>();
+    auto num_stages = body->arg(1)->as<PrimLit>()->value().get_u32();
+
+    std::vector<const Def*> stages;
+    for (size_t stage = 0; stage < num_stages; stage++) {
+        auto shader_type = body->arg(2 + stage * 2 + 0);
+        auto shader_code = body->arg(2 + stage * 2 + 1)->as_nom<Continuation>();
         ShaderKernelConfig kc;
         kc.execution_model_ = static_cast<SpvExecutionModel>(primlit_value<uint32_t>(shader_type));
-        api.backends_.register_kernel_for_offloading(body, shader_code, std::make_unique<ShaderKernelConfig>(kc));
+        auto [fn, kn] = api.backends_.register_kernel_for_offloading(body, shader_code, std::make_unique<ShaderKernelConfig>(kc));
+        stages.push_back(world.tuple({shader_type, world.bitcast(ptr_ty, world.global_immutable_string(fn)), world.bitcast(ptr_ty, world.global_immutable_string(kn)) }));
     }
+    auto stages_definite = world.definite_array(world.tuple_type({ world.type_pu32(), ptr_ty, ptr_ty }), stages);
+    auto stages_global = world.global(stages_definite, true);
 
-    continuation->set_body(world.app(ret, {mem, world.bottom(ret->type()->as<ReturnType>()->types()[1])}));
+    auto struct_t = ret->type()->as<ReturnType>()->types()[1]->as<StructType>();
+    std::vector<const Def*> agg;
+
+    agg.push_back(build_setup_args_fn(world, body->args().skip_front(3 + 2 * num_stages)));
+    agg.push_back(world.literal_pu32(num_stages, {}));
+    agg.push_back(world.bitcast(world.ptr_type(world.indefinite_array_type(world.tuple_type({ world.type_pu32(), ptr_ty, ptr_ty }))), stages_global));
+
+    continuation->set_body(world.app(ret, {mem, world.struct_agg(struct_t, agg)}));
     //continuation->set_body(world.app(api.anydsl_sync_thread, {mem, id, ret}));
 }
 #endif
