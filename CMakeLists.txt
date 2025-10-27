@@ -72,7 +72,7 @@ else()
     set(THORIN_ENABLE_SHADY TRUE)
 endif()
 
-find_package(SPIRV-Headers)
+find_package(SPIRV-Headers CONFIG)
 if (SPIRV-Headers_FOUND)
     message(STATUS "Found SPIRV-Headers at ${SPIRV-Headers_DIR}")
     set(THORIN_ENABLE_SPIRV TRUE)
