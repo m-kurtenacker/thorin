@@ -143,7 +143,7 @@ std::vector<Id> CodeGen::emit_intrinsic(const App& app, const Continuation* intr
         if (auto decoration_lit = app.arg(2)->isa<PrimLit>()) {
             auto decoration = decoration_lit->value().get_u32();
             auto id = emit(app.arg(1));
-            if (auto extra_lit = app.arg(2)->isa<PrimLit>()) {
+            if (auto extra_lit = app.arg(3)->isa<PrimLit>()) {
                 builder_->decorate(id, static_cast<spv::Decoration>(decoration), { extra_lit->value().get_u32() });
                 return productions;
             }
