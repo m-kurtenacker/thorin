@@ -1514,11 +1514,13 @@ std::string CCodeGen::emit_def(BB* bb, const Def* def) {
             suffix = " __attribute__((xcl_reqd_pipe_depth(32)))";
         }
 
-        vars_decls_.fmt("{}{} g_{} {}", prefix, converted_type, name, suffix);
-        if (global->init()->isa<Bottom>())
-            vars_decls_.fmt("; // bottom\n");
-        else
-            vars_decls_.fmt(" = {};\n", emit_constant(global->init()));
+        if (global->init()->isa<Bottom>()) {
+            vars_decls_.fmt("{}{} g_{} {}; // bottom\n", prefix, converted_type, name, suffix);
+            vars_decls_.fmt("");
+        }
+        else {
+            vars_decls_.fmt("{}{} g_{} {} = {};\n", prefix, converted_type, name, suffix, emit_constant(global->init()));
+        }
         if (use_channels_)
             s.fmt("g_{}", name);
         else
