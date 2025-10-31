@@ -79,7 +79,11 @@ VariantType* VariantType::stub(Rewriter& rewriter, const Type*) const {
 }
 
 ExternType* ExternType::stub(Rewriter& rewriter, const Type*) const {
-    return rewriter.dst().extern_type(name(), args());
+    Array<const Def*> new_ops(ops().size());
+    int i = 0;
+    for (auto o : ops())
+        new_ops[i++] = rewriter.instantiate(o);
+    return rewriter.dst().extern_type(name(), new_ops);
 }
 
 //------------------------------------------------------------------------------
@@ -161,8 +165,8 @@ VariantType* World::variant_type(Symbol name, size_t size) {
     return put<VariantType>(*this, name, size, Debug());
 }
 
-ExternType* World::extern_type(Symbol name, std::vector<std::string> args) {
-    return put<ExternType>(*this, name, args, Debug());
+ExternType* World::extern_type(Symbol name, Defs ops) {
+    return put<ExternType>(*this, name, ops, Debug());
 }
 
 const PrimType* World::prim_type(PrimTypeTag tag, size_t length) {
