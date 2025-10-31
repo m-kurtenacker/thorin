@@ -371,8 +371,8 @@ std::string CCodeGen::convert(const Type* type) {
         }
     } else if (auto extern_type = type->isa<ExternType>()) {
         name = extern_type->name().str();
-        assert(extern_type->ops().size() == 1 && "External type in C backend unsupported.");
-        auto first_arg = extern_type->ops()[0];
+        assert(extern_type->ext_args().size() == 1 && "External type in C backend unsupported.");
+        auto first_arg = extern_type->ext_args()[0];
         assert(first_arg->isa<DefiniteArray>() && "Only strings as argument.");
         s.fmt("typedef {} {};\n", first_arg->as<DefiniteArray>()->as_string(), name);
     } else {

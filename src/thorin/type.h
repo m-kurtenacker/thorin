@@ -135,17 +135,17 @@ public:
 
 class ExternType : public NominalType {
 private:
-    ExternType(World& world, Symbol name, Defs ops, Debug dbg)
+    ExternType(World& world, Symbol name, Defs ext_args, Debug dbg)
         : NominalType(world, Node_ExternType, name, 0, dbg)
-        , ops_(ops)
+        , ext_args_(ext_args)
     {}
 
-    Defs ops_;
+    Defs ext_args_;
 
 public:
     virtual ExternType* stub(Rewriter&, const Type*) const override;
 
-    Defs ops() const { return ops_; }
+    Defs ext_args() const { return ext_args_; }
 
     friend class World;
 };
