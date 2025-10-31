@@ -16,8 +16,8 @@ enum class Lang : uint8_t { C99, HLS, CUDA, OpenCL };
 
 class CodeGen : public thorin::CodeGen {
 public:
-    CodeGen(Thorin& thorin, const Cont2Config& kernel_config, Lang lang, bool debug, std::string& flags)
-        : thorin::CodeGen(thorin, debug)
+    CodeGen(World& world, const Cont2Config& kernel_config, Lang lang, bool debug, std::string& flags)
+        : thorin::CodeGen(world, debug)
         , kernel_config_(kernel_config)
         , lang_(lang)
         , debug_(debug)

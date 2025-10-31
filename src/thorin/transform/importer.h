@@ -30,6 +30,8 @@ private:
     bool todo_ = false;
 };
 
+std::unique_ptr<World> clone_world(World&);
+
 }
 
 #endif

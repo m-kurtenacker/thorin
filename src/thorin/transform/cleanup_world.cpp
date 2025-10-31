@@ -1,3 +1,5 @@
+#include "cleanup_world.h"
+
 #include "thorin/config.h"
 #include "thorin/world.h"
 #include "thorin/analyses/cfg.h"
@@ -13,11 +15,11 @@ namespace thorin {
 
 class Cleaner {
 public:
-    Cleaner(Thorin& thorin)
-        : thorin_(thorin)
+    Cleaner(std::unique_ptr<World>& world)
+        : world_(world)
     {}
 
-    World& world() { return thorin_.world(); }
+    World& world() { return *world_; }
     void cleanup();
     void eliminate_tail_rec();
     bool eliminate_tail_rec_scope(Scope&);
@@ -31,7 +33,7 @@ public:
 private:
     void cleanup_fix_point();
     void clean_pe_info(std::queue<Continuation*>, Continuation*);
-    Thorin& thorin_;
+    std::unique_ptr<World>& world_;
     bool todo_ = true;
 };
 
@@ -169,7 +171,7 @@ next_continuation:;
 }
 
 void Cleaner::demote_closures() {
-    todo_ |= thorin::demote_closures(*thorin_.world_container());
+    todo_ |= thorin::demote_closures(world());
 }
 
 void Cleaner::rebuild() {
@@ -183,7 +185,7 @@ void Cleaner::rebuild() {
             importer.import(global);
     }
 
-    std::swap(thorin_.world_container(), fresh_world);
+    std::swap(world_, fresh_world);
 
     // verify(world());
 
@@ -300,6 +302,6 @@ void Cleaner::cleanup() {
 #endif
 }
 
-void Thorin::cleanup() { Cleaner(*this).cleanup(); }
+void cleanup_world(std::unique_ptr<World>& world) { Cleaner(world).cleanup(); }
 
 }

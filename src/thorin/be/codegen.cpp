@@ -16,15 +16,17 @@
 #include "thorin/transform/hls_channels.h"
 #include "thorin/transform/hls_kernel_launch.h"
 #include "lower_offload_intrinsics.h"
+#include "thorin/transform/cleanup_world.h"
 
 namespace thorin {
 
 void Backend::prepare_kernel_configs() {
-    device_code_.opt();
+    //device_code_.opt();
+    cleanup_world(device_code_);
 
     Cont2Config adjusted_configs_map;
 
-    auto conts = device_code_.world().copy_continuations();
+    auto conts = device_code_->copy_continuations();
     for (auto& [continuation, config] : kernel_configs_) {
         // recover the imported continuation (lost after the call to opt)
         Continuation* imported = nullptr;
@@ -100,7 +102,7 @@ std::unique_ptr<KernelConfig> get_compute_kernel_config(const App* app, Continua
     return std::make_unique<GPUKernelConfig>(std::tuple<int, int, int>{-1, -1, -1}, has_restrict);
 }
 
-Backend::Backend(thorin::DeviceBackends& backends, World& src) : backends_(backends), device_code_(src), importer_(std::make_unique<Importer>(src, device_code_.world())) {}
+Backend::Backend(thorin::DeviceBackends& backends, World& src) : backends_(backends), device_code_(std::make_unique<World>(src)), importer_(std::make_unique<Importer>(src, *device_code_)) {}
 
 struct CudaBackend : public Backend {
     explicit CudaBackend(DeviceBackends& b, World& src) : Backend(b, src) {
@@ -109,7 +111,7 @@ struct CudaBackend : public Backend {
 
     std::unique_ptr<CodeGen> create_cg() override {
         std::string empty;
-        return std::make_unique<c::CodeGen>(device_code_, kernel_configs_, c::Lang::CUDA, backends_.debug(), empty);
+        return std::make_unique<c::CodeGen>(*device_code_, kernel_configs_, c::Lang::CUDA, backends_.debug(), empty);
     }
 
     std::string file_extension() override {
@@ -124,7 +126,7 @@ struct OpenCLBackend : public Backend {
 
     std::unique_ptr<CodeGen> create_cg() override {
         std::string empty;
-        return std::make_unique<c::CodeGen>(device_code_, kernel_configs_, c::Lang::OpenCL, backends_.debug(), empty);
+        return std::make_unique<c::CodeGen>(*device_code_, kernel_configs_, c::Lang::OpenCL, backends_.debug(), empty);
     }
 
     std::string file_extension() override {
@@ -140,7 +142,7 @@ struct OpenCLSPIRVBackend : public Backend {
 
     std::unique_ptr<CodeGen> create_cg() override {
         spirv::Target target;
-        return std::make_unique<spirv::CodeGen>(device_code_, target, backends_.debug(), &kernel_configs_);
+        return std::make_unique<spirv::CodeGen>(*device_code_, target, backends_.debug(), &kernel_configs_);
     }
 
     std::string file_extension() override {
@@ -155,7 +157,7 @@ struct LevelZeroSPIRVBackend : public Backend {
 
     std::unique_ptr<CodeGen> create_cg() override {
         spirv::Target target;
-        return std::make_unique<spirv::CodeGen>(device_code_, target, backends_.debug(), &kernel_configs_);
+        return std::make_unique<spirv::CodeGen>(*device_code_, target, backends_.debug(), &kernel_configs_);
     }
 
     std::string file_extension() override {
@@ -173,7 +175,7 @@ struct VulkanSPIRVBackend : public Backend {
         spirv::Target target;
         target.bugs = {};
         target.dialect = spirv::Target::Vulkan;
-        return std::make_unique<spirv::CodeGen>(device_code_, target, backends_.debug(), &kernel_configs_);
+        return std::make_unique<spirv::CodeGen>(*device_code_, target, backends_.debug(), &kernel_configs_);
     }
 
     std::string file_extension() override {
@@ -189,7 +191,7 @@ struct AMDHSABackend : public Backend {
     }
 
     std::unique_ptr<CodeGen> create_cg() override {
-        return std::make_unique<llvm::AMDGPUHSACodeGen>(device_code_, kernel_configs_, backends_.opt(), backends_.debug());
+        return std::make_unique<llvm::AMDGPUHSACodeGen>(*device_code_, kernel_configs_, backends_.opt(), backends_.debug());
     }
 
     std::string file_extension() override {
@@ -203,7 +205,7 @@ struct AMDPALBackend : public Backend {
     }
 
     std::unique_ptr<CodeGen> create_cg() override {
-        return std::make_unique<llvm::AMDGPUPALCodeGen>(device_code_, kernel_configs_, backends_.opt(), backends_.debug());
+        return std::make_unique<llvm::AMDGPUPALCodeGen>(*device_code_, kernel_configs_, backends_.opt(), backends_.debug());
     }
 
     std::string file_extension() override {
@@ -217,7 +219,7 @@ struct NVVMBackend : public Backend {
     }
 
     std::unique_ptr<CodeGen> create_cg() override {
-        return std::make_unique<llvm::NVVMCodeGen>(device_code_, kernel_configs_, backends_.opt(), backends_.debug());
+        return std::make_unique<llvm::NVVMCodeGen>(*device_code_, kernel_configs_, backends_.opt(), backends_.debug());
     }
 
     std::string file_extension() override {
@@ -235,11 +237,12 @@ struct HLSBackend : public Backend {
         Top2Kernel top2kernel;
         DeviceParams hls_host_params;
 
-        hls_host_params = hls_channels(device_code_, *importer_, top2kernel, backends_.world());
-        hls_annotate_top(device_code_.world(), top2kernel, kernel_configs_);
-        hls_kernel_launch(device_code_.world(), hls_host_params);
+        hls_host_params = hls_channels(*device_code_, *importer_, top2kernel);
+        cleanup_world(device_code_);
+        hls_annotate_top(*device_code_, top2kernel, kernel_configs_);
+        hls_kernel_launch(*device_code_, hls_host_params);
 
-        return std::make_unique<c::CodeGen>(device_code_, kernel_configs_, c::Lang::HLS, backends_.debug(), hls_flags_);
+        return std::make_unique<c::CodeGen>(*device_code_, kernel_configs_, c::Lang::HLS, backends_.debug(), hls_flags_);
     }
 
     std::string file_extension() override {
@@ -299,7 +302,7 @@ DeviceBackends::DeviceBackends(World& world, int opt, bool debug, std::string& h
     lower_offload_intrinsics(world, *this);
 
     for (auto& backend : backends_) {
-        if (backend->thorin().world().empty())
+        if (backend->world().empty())
             continue;
 
         backend->prepare_kernel_configs();
@@ -347,8 +350,8 @@ std::tuple<std::string, std::string> DeviceBackends::register_kernel_for_offload
     return r;
 }
 
-CodeGen::CodeGen(Thorin& thorin, bool debug)
-    : thorin_(thorin)
+CodeGen::CodeGen(World& world, bool debug)
+    : world_(world)
     , debug_(debug)
 {}
 

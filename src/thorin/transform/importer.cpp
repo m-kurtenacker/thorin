@@ -126,4 +126,18 @@ const Def* Importer::find_origin(const Def* ndef) {
     return nullptr;
 }
 
+std::unique_ptr<World> clone_world(World& world) {
+    auto fresh_world = std::make_unique<World>(world);
+    Importer importer(world, *fresh_world);
+
+    for (auto&& [_, def] : world.externals()) {
+        if (auto cont = def->isa<Continuation>(); cont && cont->is_exported())
+            importer.import(cont);
+        if (auto global = def->isa<Global>(); global && global->is_external())
+            importer.import(global);
+    }
+    return fresh_world;
+}
+
+
 }

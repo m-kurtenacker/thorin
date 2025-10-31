@@ -8,7 +8,7 @@ namespace thorin {
 
 class CodeGen {
 protected:
-    CodeGen(Thorin& thorin, bool debug);
+    CodeGen(World&, bool debug);
 public:
     virtual ~CodeGen() {}
 
@@ -16,13 +16,12 @@ public:
 
     /// @name getters
     //@{
-    Thorin& thorin() const { return thorin_; }
-    World& world() const { return thorin().world(); }
+    World& world() const { return world_; }
     bool debug() const { return debug_; }
     //@}
 
 private:
-    Thorin& thorin_;
+    World& world_;
     bool debug_;
 };
 
@@ -35,12 +34,12 @@ struct Backend {
     virtual std::unique_ptr<CodeGen> create_cg() = 0;
     virtual std::string file_extension() = 0;
 
-    Thorin& thorin() { return device_code_; }
+    World& world() { return *device_code_; }
     Importer& importer() { return *importer_; }
 
 protected:
     DeviceBackends& backends_;
-    Thorin device_code_;
+    std::unique_ptr<World> device_code_;
     std::unique_ptr<Importer> importer_;
 
     Cont2Config kernel_configs_;

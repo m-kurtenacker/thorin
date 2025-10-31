@@ -423,6 +423,9 @@ public:
     explicit Thorin(const std::string& name);
     explicit Thorin(World& src);
 
+    Thorin(Thorin&) = delete;
+    Thorin(const Thorin&&) = delete;
+
     World& world() { return *world_; };
     std::unique_ptr<World>& world_container() { return world_; }
 

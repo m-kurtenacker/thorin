@@ -13,7 +13,7 @@ namespace llvm = ::llvm;
 
 class NVVMCodeGen : public CodeGen {
 public:
-    NVVMCodeGen(Thorin&, const Cont2Config&, int opt, bool debug); // NVVM-specific optimizations are run in the runtime
+    NVVMCodeGen(World&, const Cont2Config&, int opt, bool debug); // NVVM-specific optimizations are run in the runtime
 
 protected:
     void emit_fun_decl_hook(Continuation*, llvm::Function*) override;

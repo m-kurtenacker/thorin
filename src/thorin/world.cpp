@@ -25,7 +25,7 @@
 #include "thorin/type.h"
 #include "thorin/analyses/scope.h"
 #include "thorin/analyses/verify.h"
-#include "thorin/transform/closure_conversion.h"
+#include "thorin/transform/cleanup_world.h"
 #include "thorin/transform/codegen_prepare.h"
 #include "thorin/transform/dead_load_opt.h"
 #include "thorin/transform/flatten_tuples.h"
@@ -1365,7 +1365,7 @@ Thorin::Thorin(const std::string& name)
     : world_(std::make_unique<World>(name))
 {}
 
-Thorin::Thorin(thorin::World& src) : world_(std::make_unique<World>(src)) {}
+Thorin::Thorin(World& src) : world_(std::make_unique<World>(src)) {}
 
 void Thorin::opt() {
     bool debug_passes = getenv("THORIN_DEBUG_PASSES");
@@ -1391,6 +1391,8 @@ void Thorin::opt() {
     //RUN_PASS(cleanup())
     RUN_PASS(codegen_prepare(*this))
 }
+
+void Thorin::cleanup() { cleanup_world(world_container()); }
 
 bool Thorin::ensure_stack_size(size_t new_size) {
 #if THORIN_ENABLE_RLIMITS

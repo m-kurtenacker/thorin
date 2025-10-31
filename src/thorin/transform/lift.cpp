@@ -1,6 +1,5 @@
 #include "lift.h"
 
-
 #include "thorin/continuation.h"
 #include "thorin/world.h"
 #include "thorin/analyses/scope.h"
@@ -586,8 +585,6 @@ const Def* ClosureConverter::ScopeRewriter::rewrite(const Def* const odef) {
                     nintrinsic_types.push_back(env->type());
                     nargs.push_back(env);
                 }
-                auto nintrinsic = dst().continuation(dst().fn_type(nintrinsic_types), ncont->attributes(),ncont->debug());
-                ncallee = nintrinsic;
 
                 size_t j = 0;
                 for (size_t i = 0; i < ncont->num_params(); i++) {
@@ -612,6 +609,9 @@ const Def* ClosureConverter::ScopeRewriter::rewrite(const Def* const odef) {
                         nintrinsic_types[i] = new_kernel.wrapper->type();
                     }
                 }
+
+                auto nintrinsic = dst().continuation(dst().fn_type(nintrinsic_types), ncont->attributes(),ncont->debug());
+                ncallee = nintrinsic;
             } else if (ncont->is_intrinsic()) {
                 for (size_t i = 0; i < app->num_args(); i++) {
                     // ensure the BB arguments to intrinsics such as branch and match are left as continuations

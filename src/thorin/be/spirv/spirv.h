@@ -48,7 +48,7 @@ struct BasicBlockBuilder;
 
 class CodeGen : public thorin::CodeGen, public thorin::Emitter<Id, ConvertedType, BasicBlockBuilder*, CodeGen> {
 public:
-    CodeGen(Thorin& thorin, Target&, bool debug, const Cont2Config* = nullptr);
+    CodeGen(World&, Target&, bool debug, const Cont2Config* = nullptr);
 
     void emit_stream(std::ostream& stream) override;
 

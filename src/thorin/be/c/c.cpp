@@ -6,6 +6,7 @@
 #include "thorin/analyses/schedule.h"
 #include "thorin/analyses/scope.h"
 #include "thorin/transform/hls_channels.h"
+#include "thorin/transform/cleanup_world.h"
 #include "thorin/be/emitter.h"
 #include "thorin/util/stream.h"
 #include "c.h"
@@ -73,8 +74,8 @@ enum class HlsInterface : uint8_t {
 
 class CCodeGen : public thorin::Emitter<std::string, std::string, BB, CCodeGen> {
 public:
-    CCodeGen(Thorin& thorin, const Cont2Config& kernel_config, Stream& stream, Lang lang, bool debug, std::string& flags)
-        : thorin_(thorin)
+    CCodeGen(std::unique_ptr<World>&& w, const Cont2Config& kernel_config, Stream& stream, Lang lang, bool debug, std::string& flags)
+        : world_(std::move(w))
         , forest_(world())
         , kernel_config_(kernel_config)
         , lang_(lang)
@@ -84,7 +85,7 @@ public:
         , stream_(stream)
     {}
 
-    World& world() const { return thorin_.world(); }
+    World& world() const { return *world_; }
     void emit_module();
     void emit_c_int();
     void emit_epilogue(Continuation*);
@@ -125,7 +126,7 @@ private:
     std::string return_name(const ReturnType*);
     std::string fn_name(const FnType*);
 
-    Thorin& thorin_;
+    std::unique_ptr<World> world_;
     ScopesForest forest_;
     const Cont2Config& kernel_config_;
     Lang lang_;
@@ -1658,7 +1659,7 @@ Stream& CCodeGen::emit_debug_info(Stream& s, const Def* def) {
 
 void CCodeGen::emit_c_int() {
     // Do not emit C interfaces for definitions that are not used
-    thorin_.cleanup();
+    cleanup_world(world_);
 
     for (auto def : world().defs()) {
         auto cont = def->isa_nom<Continuation>();
@@ -1807,12 +1808,14 @@ std::string CCodeGen::return_name(const ReturnType* fn_type) {
 
 void CodeGen::emit_stream(std::ostream& stream) {
     Stream s(stream);
-    CCodeGen(thorin(), kernel_config_, s, lang_, debug_, flags_).emit_module();
+    auto copy = clone_world(world());
+    CCodeGen(std::move(copy), kernel_config_, s, lang_, debug_, flags_).emit_module();
 }
 
 void emit_c_int(Thorin& thorin, Stream& stream) {
     std::string flags;
-    CCodeGen(thorin, {}, stream, Lang::C99, false, flags).emit_c_int();
+    auto copy = clone_world(thorin.world());
+    CCodeGen(std::move(copy), {}, stream, Lang::C99, false, flags).emit_c_int();
 }
 
 //------------------------------------------------------------------------------
