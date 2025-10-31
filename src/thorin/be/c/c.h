@@ -5,6 +5,7 @@
 #include <iostream>
 
 #include "thorin/be/codegen.h"
+#include "thorin/thorin.h"
 
 namespace thorin {
 

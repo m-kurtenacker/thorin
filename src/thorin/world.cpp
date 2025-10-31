@@ -1,41 +1,12 @@
 #include "thorin/world.h"
 
-// for colored output
-#ifdef _WIN32
-#include <io.h>
-#define isatty _isatty
-#define fileno _fileno
-#else
-#include <unistd.h>
-#endif
-
 #include <cmath>
-
-#if THORIN_ENABLE_CREATION_CONTEXT
-#include <execinfo.h>
-#endif
-
-#if THORIN_ENABLE_RLIMITS
-#include <sys/resource.h>
-#endif
 
 #include "thorin/def.h"
 #include "thorin/primop.h"
 #include "thorin/continuation.h"
 #include "thorin/type.h"
 #include "thorin/analyses/scope.h"
-#include "thorin/analyses/verify.h"
-#include "thorin/transform/cleanup_world.h"
-#include "thorin/transform/codegen_prepare.h"
-#include "thorin/transform/dead_load_opt.h"
-#include "thorin/transform/flatten_tuples.h"
-#include "thorin/transform/hoist_enters.h"
-#include "thorin/transform/inliner.h"
-#include "thorin/transform/lift.h"
-#include "thorin/transform/lift_builtins.h"
-#include "thorin/transform/partial_evaluation.h"
-#include "thorin/transform/lower_closure_env.h"
-#include "thorin/transform/split_slots.h"
 #include "thorin/util/array.h"
 
 #if (defined(__clang__) || defined(__GNUC__)) && (defined(__x86_64__) || defined(__i386__))
@@ -1304,18 +1275,6 @@ int World::level2color(LogLevel level) {
     THORIN_UNREACHABLE;
 }
 
-#ifdef COLORIZE_LOG
-std::string World::colorize(const std::string& str, int color) {
-    if (isatty(fileno(stdout))) {
-        const char c = '0' + color;
-        return "\033[1;3" + (c + ('m' + str)) + "\033[0m";
-    }
-#else
-std::string World::colorize(const std::string& str, int) {
-#endif
-    return str;
-}
-
 const Def* World::try_fold_aggregate(const Aggregate* agg) {
     const Def* from = nullptr;
     for (size_t i = 0, e = agg->num_ops(); i != e; ++i) {
@@ -1356,59 +1315,5 @@ World::~World() {
         delete def;
     }
 }
-
-/*
- * optimizations
- */
-
-Thorin::Thorin(const std::string& name)
-    : world_(std::make_unique<World>(name))
-{}
-
-Thorin::Thorin(World& src) : world_(std::make_unique<World>(src)) {}
-
-void Thorin::opt() {
-    bool debug_passes = getenv("THORIN_DEBUG_PASSES");
-#define RUN_PASS(pass) \
-{ \
-    world().VLOG("running pass {}", #pass);  \
-    pass;                                    \
-    debug_verify(world());                   \
-    if (debug_passes) world().dump_scoped(); \
-}
-
-    RUN_PASS(cleanup())
-    //RUN_PASS(while (partial_evaluation(world(), true))); // lower2cff
-    RUN_PASS(flatten_tuples(*this))
-    RUN_PASS(split_slots(*this))
-    RUN_PASS(lift(*this));
-    //RUN_PASS(closure_conversion(world()))
-    //RUN_PASS(lift_builtins(*this))
-    //RUN_PASS(inliner(*this))
-    RUN_PASS(hoist_enters(*this))
-    RUN_PASS(dead_load_opt(world()))
-    RUN_PASS(lower_closure_env(*this));
-    //RUN_PASS(cleanup())
-    RUN_PASS(codegen_prepare(*this))
-}
-
-void Thorin::cleanup() { cleanup_world(world_container()); }
-
-bool Thorin::ensure_stack_size(size_t new_size) {
-#if THORIN_ENABLE_RLIMITS
-    struct rlimit rl;
-    int result = getrlimit(RLIMIT_STACK, &rl);
-    if(result != 0) return false;
-
-    rl.rlim_cur = new_size;
-    result = setrlimit(RLIMIT_STACK, &rl);
-    if(result != 0) return false;
-
-    return true;
-#else
-    return false;
-#endif
-}
-
 
 }

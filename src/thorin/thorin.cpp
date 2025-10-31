@@ -1,0 +1,54 @@
+#include "thorin.h"
+
+#include "thorin/analyses/verify.h"
+#include "thorin/transform/cleanup_world.h"
+#include "thorin/transform/codegen_prepare.h"
+#include "thorin/transform/dead_load_opt.h"
+#include "thorin/transform/flatten_tuples.h"
+#include "thorin/transform/hoist_enters.h"
+#include "thorin/transform/inliner.h"
+#include "thorin/transform/lift.h"
+#include "thorin/transform/lift_builtins.h"
+#include "thorin/transform/partial_evaluation.h"
+#include "thorin/transform/lower_closure_env.h"
+#include "thorin/transform/split_slots.h"
+
+namespace thorin {
+
+Thorin::Thorin(const std::string& name)
+    : world_(std::make_unique<World>(name))
+{}
+
+Thorin::Thorin(World& src) : world_(std::make_unique<World>(src)) {}
+
+/*
+* optimizations
+ */
+void Thorin::opt() {
+    bool debug_passes = getenv("THORIN_DEBUG_PASSES");
+#define RUN_PASS(pass) \
+{ \
+world().VLOG("running pass {}", #pass);  \
+pass;                                    \
+debug_verify(world());                   \
+if (debug_passes) world().dump_scoped(); \
+}
+
+    RUN_PASS(cleanup())
+    //RUN_PASS(while (partial_evaluation(world(), true))); // lower2cff
+    RUN_PASS(flatten_tuples(*this))
+    RUN_PASS(split_slots(*this))
+    RUN_PASS(lift(*this));
+    //RUN_PASS(closure_conversion(world()))
+    //RUN_PASS(lift_builtins(*this))
+    //RUN_PASS(inliner(*this))
+    RUN_PASS(hoist_enters(*this))
+    RUN_PASS(dead_load_opt(world()))
+    RUN_PASS(lower_closure_env(*this));
+    //RUN_PASS(cleanup())
+    RUN_PASS(codegen_prepare(*this))
+}
+
+void Thorin::cleanup() { cleanup_world(world_container()); }
+
+}

@@ -1,6 +1,8 @@
 #ifndef THORIN_TRANSFORM_SPLIT_SLOTS_H
 #define THORIN_TRANSFORM_SPLIT_SLOTS_H
 
+#include "thorin/thorin.h"
+
 namespace thorin {
 
 class World;

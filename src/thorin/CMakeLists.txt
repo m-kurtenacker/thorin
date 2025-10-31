@@ -7,9 +7,12 @@ set(THORIN_SOURCES
     def.h
     enums.cpp
     enums.h
+    portability.cpp
     primop.cpp
     primop.h
     rec_stream.cpp
+    thorin.cpp
+    thorin.h
     type.cpp
     type.h
     world.cpp

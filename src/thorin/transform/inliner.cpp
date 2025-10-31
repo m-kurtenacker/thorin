@@ -1,5 +1,5 @@
-#include "thorin/continuation.h"
-#include "thorin/world.h"
+#include "inliner.h"
+
 #include "thorin/analyses/cfg.h"
 #include "thorin/analyses/scope.h"
 #include "thorin/analyses/verify.h"

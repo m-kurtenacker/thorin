@@ -1,4 +1,4 @@
-#include "thorin/world.h"
+#include "thorin/thorin.h"
 
 namespace thorin {
 

@@ -1,4 +1,5 @@
-#include "thorin/world.h"
+#include "codegen_prepare.h"
+
 #include "thorin/analyses/scope.h"
 #include "thorin/transform/rewrite.h"
 
