@@ -498,13 +498,28 @@ const Def* ClosureConverter::ScopeRewriter::rewrite(const Def* const odef) {
 
         if (ncont) {
             if (ncont->is_accelerator()) {
-                // we're going to change the type of the accelarator ofc
-                std::vector<const Type*> nintrinsic_types;
-                for (auto t : ncont->type()->copy_types())
-                    nintrinsic_types.push_back(t);
+                struct KernelLiftCtx {
+                    Continuation* wrapper;
+                    const Def* mem;
+                };
+
+                std::vector<KernelLiftCtx> lifted_kernels;
+
+                // iterate over the kernels and register params for them
+                for (size_t i = 0; i < ncont->num_params(); i++) {
+                    if (!nargs[i]) {
+                        //auto okernel = app->arg(i)->as_nom<Continuation>();
+                        Continuation* wrapper = dst().continuation(dst().fn_type({dst().mem_type(), dst().return_type({dst().mem_type()})}));
+                        lifted_kernels.push_back({
+                            .wrapper = wrapper,
+                            .mem = wrapper->mem_param(),
+                        });
+                    }
+                }
 
                 struct {
                     World& world;
+                    std::vector<KernelLiftCtx>& lifted_kernels;
                     DefMap<int> map;
                     std::vector<const Def*> lifted_args;
                     std::vector<const Type*> env_types;
@@ -541,15 +556,15 @@ const Def* ClosureConverter::ScopeRewriter::rewrite(const Def* const odef) {
                             if (!wrapper) {
                                 env_types.push_back(t);
                                 lifted_args.push_back(def);
+                                for (auto& k : lifted_kernels) {
+                                    k.wrapper->append_param(t);
+                                }
                                 map[def] = count++;
                                 return nullptr;
                             }
-                            //auto env_param = wrapper->append_param(t);
-                            //nargs->push_back(def);
-                            //return env_param;
                         }
                     }
-                } flattener = { dst() };
+                } flattener = { dst(), lifted_kernels };
 
                 // iterate over the kernels and register params for them
                 for (size_t i = 0; i < ncont->num_params(); i++) {
@@ -563,11 +578,18 @@ const Def* ClosureConverter::ScopeRewriter::rewrite(const Def* const odef) {
                 }
 
                 // we add them once to the call
+                // we're going to change the type of the accelarator ofc
+                std::vector<const Type*> nintrinsic_types;
+                for (auto t : ncont->type()->copy_types())
+                    nintrinsic_types.push_back(t);
                 for (auto env : flattener.lifted_args) {
                     nintrinsic_types.push_back(env->type());
                     nargs.push_back(env);
                 }
+                auto nintrinsic = dst().continuation(dst().fn_type(nintrinsic_types), ncont->attributes(),ncont->debug());
+                ncallee = nintrinsic;
 
+                size_t j = 0;
                 for (size_t i = 0; i < ncont->num_params(); i++) {
                     if (!nargs[i]) {
                         auto old_kernel = app->arg(i)->as_nom<Continuation>();
@@ -577,24 +599,19 @@ const Def* ClosureConverter::ScopeRewriter::rewrite(const Def* const odef) {
                         children_.emplace_back(std::make_unique<ScopeRewriter>(converter_, &scope, this));
                         body_rewriter = children_.back().get();
 
-                        Continuation* wrapper = dst().continuation(dst().fn_type({dst().mem_type(), dst().return_type({dst().mem_type()})}));
-                        for (auto env_t : flattener.env_types)
-                            wrapper->append_param(env_t);
-
+                        auto& new_kernel = lifted_kernels[j++];
                         for (auto ofv : converter_.lookup(old_kernel).free_vars) {
                             auto fv = instantiate(ofv);
-                            auto inner = flattener.flatten(fv, wrapper);
+                            auto inner = flattener.flatten(fv, new_kernel.wrapper);
                             body_rewriter->insert(ofv, inner);
                         }
 
-                        wrapper->jump(body_rewriter->rewrite(old_kernel), { wrapper->mem_param(), wrapper->ret_param() });
+                        new_kernel.wrapper->jump(body_rewriter->rewrite(old_kernel), { new_kernel.mem, new_kernel.wrapper->ret_param() });
 
-                        nargs[i] = wrapper;
-                        nintrinsic_types[i] = wrapper->type();
+                        nargs[i] = new_kernel.wrapper;
+                        nintrinsic_types[i] = new_kernel.wrapper->type();
                     }
                 }
-                auto nintrinsic = dst().continuation(dst().fn_type(nintrinsic_types), ncont->attributes(),ncont->debug());
-                ncallee = nintrinsic;
             } else if (ncont->is_intrinsic()) {
                 for (size_t i = 0; i < app->num_args(); i++) {
                     // ensure the BB arguments to intrinsics such as branch and match are left as continuations
