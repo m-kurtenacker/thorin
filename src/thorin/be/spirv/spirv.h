@@ -5,6 +5,8 @@
 #include "thorin/be/codegen.h"
 #include "thorin/be/emitter.h"
 
+#include "thorin/offload/kernel_config.h"
+
 namespace thorin::spirv {
 
 using Id = uint32_t;

@@ -11,8 +11,6 @@
 #include "thorin/analyses/schedule.h"
 #include "thorin/be/codegen.h"
 #include "thorin/be/emitter.h"
-#include "thorin/be/kernel_config.h"
-#include "thorin/transform/importer.h"
 
 namespace thorin {
 

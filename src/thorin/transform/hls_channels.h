@@ -1,7 +1,7 @@
 #ifndef THORIN_TRANSFORM_HLS_CHANNELS_H
 #define THORIN_TRANSFORM_HLS_CHANNELS_H
 
-#include "thorin/be/kernel_config.h"
+#include "thorin/offload/kernel_config.h"
 #include "thorin/transform/importer.h"
 
 namespace thorin {

@@ -2,6 +2,8 @@
 
 #include "runtime.h"
 
+#include "thorin/offload/kernel_config.h"
+
 namespace thorin {
 
 struct RuntimeAPI {

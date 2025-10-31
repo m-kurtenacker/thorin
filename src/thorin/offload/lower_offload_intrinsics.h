@@ -1,7 +1,7 @@
-#ifndef THORIN_OFFLOAD_H
-#define THORIN_OFFLOAD_H
+#ifndef THORIN_OFFLOAD_INTRINSICS_H
+#define THORIN_OFFLOAD_INTRINSICS_H
 
-#include "codegen.h"
+#include "offload.h"
 #include "thorin/world.h"
 
 namespace thorin {

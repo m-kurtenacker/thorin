@@ -2,6 +2,7 @@
 #define THORIN_BE_LLVM_AMDGPU_H
 
 #include "thorin/be/llvm/llvm.h"
+#include "thorin/offload/kernel_config.h"
 
 namespace thorin {
 

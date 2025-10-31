@@ -1,6 +1,7 @@
-#ifndef THORIN_BE_KERNEL_CONFIG_H
-#define THORIN_BE_KERNEL_CONFIG_H
+#ifndef THORIN_OFFLOAD_KERNEL_CONFIG_H
+#define THORIN_OFFLOAD_KERNEL_CONFIG_H
 
+#include "thorin/world.h"
 #include "thorin/util/cast.h"
 #include "thorin/util/hash.h"
 
@@ -12,6 +13,10 @@ public:
 };
 
 typedef ContinuationMap<std::unique_ptr<KernelConfig>> Cont2Config;
+
+using GetKernelConfigFn = std::unique_ptr<KernelConfig>(const App*, Continuation*);
+GetKernelConfigFn get_hls_kernel_config;
+GetKernelConfigFn get_compute_kernel_config;
 
 class GPUKernelConfig : public KernelConfig {
 public:

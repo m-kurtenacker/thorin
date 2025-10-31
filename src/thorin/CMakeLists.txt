@@ -33,10 +33,13 @@ set(THORIN_SOURCES
     be/emitter.h
     be/c/c.cpp
     be/c/c.h
-    be/lower_offload_intrinsics.cpp
-    be/lower_offload_intrinsics.h
-    be/runtime.h
-    be/kernel_config.h
+    offload/offload.cpp
+    offload/offload.h
+    offload/lower_offload_intrinsics.cpp
+    offload/lower_offload_intrinsics.h
+    offload/runtime.h
+    offload/kernel_config.cpp
+    offload/kernel_config.h
     tables/allnodes.h
     tables/arithoptable.h
     tables/cmptable.h
