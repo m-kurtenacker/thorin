@@ -8,7 +8,7 @@ namespace thorin {
 
 enum class KernelArgType : uint8_t { Val = 0, Ptr, Struct };
 
-void lower_offload_intrinsics(World&, DeviceBackends&);
+void lower_offload_intrinsics(World&, Offload&);
 
 }
 

@@ -1,6 +1,8 @@
 #include "thorin.h"
 
 #include "thorin/analyses/verify.h"
+#include "thorin/offload/offload.h"
+
 #include "thorin/transform/cleanup_world.h"
 #include "thorin/transform/codegen_prepare.h"
 #include "thorin/transform/dead_load_opt.h"
@@ -15,16 +17,22 @@
 
 namespace thorin {
 
-Thorin::Thorin(const std::string& name)
+Thorin::Thorin(const std::string& name, int opt, bool debug, std::string& hls_flags)
     : world_(std::make_unique<World>(name))
+    , opt_(opt)
+    , debug_(debug)
+    , hls_flags_(hls_flags)
+    , offload_(std::make_unique<Offload>(*this))
 {}
 
-Thorin::Thorin(World& src) : world_(std::make_unique<World>(src)) {}
+bool Thorin::debug() { return debug_; }
+int Thorin::opt() { return opt_; }
+std::string& Thorin::hls_flags() { return hls_flags_; }
 
 /*
 * optimizations
  */
-void Thorin::opt() {
+void Thorin::compile() {
     bool debug_passes = getenv("THORIN_DEBUG_PASSES");
 #define RUN_PASS(pass) \
 { \
@@ -47,6 +55,7 @@ if (debug_passes) world().dump_scoped(); \
     RUN_PASS(lower_closure_env(*this));
     //RUN_PASS(cleanup())
     RUN_PASS(codegen_prepare(*this))
+    offload_->offload(world());
 }
 
 void Thorin::cleanup() { cleanup_world(world_container()); }

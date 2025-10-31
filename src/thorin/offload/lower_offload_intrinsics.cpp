@@ -8,7 +8,7 @@ namespace thorin {
 
 struct RuntimeAPI {
     World& world_;
-    DeviceBackends& backends_;
+    Offload& backends_;
 
     const Def* anydsl_alloc;
     const Def* anydsl_alloc_unified;
@@ -23,7 +23,7 @@ struct RuntimeAPI {
     const Def* anydsl_create_edge;
     const Def* anydsl_execute_graph;
 
-    RuntimeAPI(World& world, DeviceBackends& backends) : world_(world), backends_(backends) {
+    RuntimeAPI(World& world, Offload& backends) : world_(world), backends_(backends) {
         auto get_api_fn = [&](Types dom, const Type* codom, std::string name) {
             auto mem_ty = world.mem_type();
             auto found = world.find_cont(name.c_str());
@@ -436,7 +436,7 @@ void emit_vulkan_offload(RuntimeAPI& api, Continuation* continuation) {
 }
 #endif
 
-void lower_offload_intrinsics(World& world, DeviceBackends& backends) {
+void lower_offload_intrinsics(World& world, Offload& backends) {
     RuntimeAPI api(world, backends);
 
     for (auto continuation : world.copy_continuations()) {

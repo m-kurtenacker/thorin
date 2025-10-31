@@ -20,7 +20,7 @@
 
 namespace thorin {
 
-Backend::Backend(thorin::DeviceBackends& backends, World& src) : backends_(backends), device_code_(std::make_unique<World>(src)), importer_(std::make_unique<Importer>(src, *device_code_)) {}
+Backend::Backend(thorin::Offload& backends) : backends_(backends), device_code_(std::make_unique<World>(backends.thorin().world())) {}
 
 void Backend::prepare_kernel_configs() {
     //device_code_.opt();
@@ -47,19 +47,17 @@ void Backend::prepare_kernel_configs() {
     std::swap(kernel_configs_, adjusted_configs_map);
 }
 
-void DeviceBackends::register_backend(std::unique_ptr<Backend> backend) {
+void Offload::register_backend(std::unique_ptr<Backend> backend) {
     backends_.push_back(std::move(backend));
 }
 
-World& DeviceBackends::world() { return world_; }
-bool DeviceBackends::debug() { return debug_; }
-int DeviceBackends::opt() { return opt_; }
+//World& Offload::world() { return world_; }
 
-void DeviceBackends::register_intrinsic(thorin::Intrinsic intrinsic, Backend& backend) {
+void Offload::register_intrinsic(thorin::Intrinsic intrinsic, Backend& backend) {
     intrinsics_[intrinsic] = &backend;
 }
 
-std::tuple<std::string, std::string> DeviceBackends::register_kernel_for_offloading(const App* launch, Continuation* kernel, std::unique_ptr<KernelConfig> config) {
+std::tuple<std::string, std::string> Offload::register_kernel_for_offloading(const App* launch, Continuation* kernel, std::unique_ptr<KernelConfig> config) {
     auto found = unique_kernel_.find(kernel);
     if (found != unique_kernel_.end())
         return found->second;
@@ -69,7 +67,7 @@ std::tuple<std::string, std::string> DeviceBackends::register_kernel_for_offload
     auto backend = handler->second;
 
     auto kernel_name = kernel->unique_name();
-    auto filename = world().name() + backend->file_extension();
+    auto filename = thorin().world().name() + backend->file_extension();
     auto r = std::make_tuple(filename, kernel_name);
     kernel->set_name(kernel_name);
     unique_kernel_[kernel] = r;
@@ -89,13 +87,13 @@ std::tuple<std::string, std::string> DeviceBackends::register_kernel_for_offload
 }
 
 struct CudaBackend : public Backend {
-    explicit CudaBackend(DeviceBackends& b, World& src) : Backend(b, src) {
+    explicit CudaBackend(Offload& b) : Backend(b) {
         b.register_intrinsic(Intrinsic::CUDA, *this);
     }
 
     std::unique_ptr<CodeGen> create_cg() override {
         std::string empty;
-        return std::make_unique<c::CodeGen>(*device_code_, kernel_configs_, c::Lang::CUDA, backends_.debug(), empty);
+        return std::make_unique<c::CodeGen>(*device_code_, kernel_configs_, c::Lang::CUDA, backends_.thorin().debug(), empty);
     }
 
     std::string file_extension() override {
@@ -104,13 +102,13 @@ struct CudaBackend : public Backend {
 };
 
 struct OpenCLBackend : public Backend {
-    explicit OpenCLBackend(DeviceBackends& b, World& src) : Backend(b, src) {
+    explicit OpenCLBackend(Offload& b) : Backend(b) {
         b.register_intrinsic(Intrinsic::OpenCL, *this);
     }
 
     std::unique_ptr<CodeGen> create_cg() override {
         std::string empty;
-        return std::make_unique<c::CodeGen>(*device_code_, kernel_configs_, c::Lang::OpenCL, backends_.debug(), empty);
+        return std::make_unique<c::CodeGen>(*device_code_, kernel_configs_, c::Lang::OpenCL, backends_.thorin().debug(), empty);
     }
 
     std::string file_extension() override {
@@ -120,13 +118,13 @@ struct OpenCLBackend : public Backend {
 
 #if THORIN_ENABLE_SPIRV
 struct OpenCLSPIRVBackend : public Backend {
-    explicit OpenCLSPIRVBackend(DeviceBackends& b, World& src) : Backend(b, src) {
+    explicit OpenCLSPIRVBackend(Offload& b) : Backend(b) {
         b.register_intrinsic(Intrinsic::OpenCL_SPIRV, *this);
     }
 
     std::unique_ptr<CodeGen> create_cg() override {
         spirv::Target target;
-        return std::make_unique<spirv::CodeGen>(*device_code_, target, backends_.debug(), &kernel_configs_);
+        return std::make_unique<spirv::CodeGen>(*device_code_, target, backends_.thorin().debug(), &kernel_configs_);
     }
 
     std::string file_extension() override {
@@ -135,13 +133,13 @@ struct OpenCLSPIRVBackend : public Backend {
 };
 
 struct LevelZeroSPIRVBackend : public Backend {
-    explicit LevelZeroSPIRVBackend(DeviceBackends& b, World& src) : Backend(b, src) {
+    explicit LevelZeroSPIRVBackend(Offload& b) : Backend(b) {
         b.register_intrinsic(Intrinsic::LevelZero_SPIRV, *this);
     }
 
     std::unique_ptr<CodeGen> create_cg() override {
         spirv::Target target;
-        return std::make_unique<spirv::CodeGen>(*device_code_, target, backends_.debug(), &kernel_configs_);
+        return std::make_unique<spirv::CodeGen>(*device_code_, target, backends_.thorin().debug(), &kernel_configs_);
     }
 
     std::string file_extension() override {
@@ -150,7 +148,7 @@ struct LevelZeroSPIRVBackend : public Backend {
 };
 
 struct VulkanSPIRVBackend : public Backend {
-    explicit VulkanSPIRVBackend(DeviceBackends& b, World& src) : Backend(b, src) {
+    explicit VulkanSPIRVBackend(Offload& b) : Backend(b) {
         b.register_intrinsic(Intrinsic::VulkanCS_SPIRV, *this);
         b.register_intrinsic(Intrinsic::VulkanOffload_SPIRV, *this);
     }
@@ -159,7 +157,7 @@ struct VulkanSPIRVBackend : public Backend {
         spirv::Target target;
         target.bugs = {};
         target.dialect = spirv::Target::Vulkan;
-        return std::make_unique<spirv::CodeGen>(*device_code_, target, backends_.debug(), &kernel_configs_);
+        return std::make_unique<spirv::CodeGen>(*device_code_, target, backends_.thorin().debug(), &kernel_configs_);
     }
 
     std::string file_extension() override {
@@ -170,12 +168,12 @@ struct VulkanSPIRVBackend : public Backend {
 
 #if THORIN_ENABLE_LLVM
 struct AMDHSABackend : public Backend {
-    explicit AMDHSABackend(DeviceBackends& b, World& src) : Backend(b, src) {
+    explicit AMDHSABackend(Offload& b) : Backend(b) {
         b.register_intrinsic(Intrinsic::AMDGPUHSA, *this);
     }
 
     std::unique_ptr<CodeGen> create_cg() override {
-        return std::make_unique<llvm::AMDGPUHSACodeGen>(*device_code_, kernel_configs_, backends_.opt(), backends_.debug());
+        return std::make_unique<llvm::AMDGPUHSACodeGen>(*device_code_, kernel_configs_, backends_.thorin().opt(), backends_.thorin().debug());
     }
 
     std::string file_extension() override {
@@ -184,12 +182,12 @@ struct AMDHSABackend : public Backend {
 };
 
 struct AMDPALBackend : public Backend {
-    explicit AMDPALBackend(DeviceBackends& b, World& src) : Backend(b, src) {
+    explicit AMDPALBackend(Offload& b) : Backend(b) {
         b.register_intrinsic(Intrinsic::AMDGPUPAL, *this);
     }
 
     std::unique_ptr<CodeGen> create_cg() override {
-        return std::make_unique<llvm::AMDGPUPALCodeGen>(*device_code_, kernel_configs_, backends_.opt(), backends_.debug());
+        return std::make_unique<llvm::AMDGPUPALCodeGen>(*device_code_, kernel_configs_, backends_.thorin().opt(), backends_.thorin().debug());
     }
 
     std::string file_extension() override {
@@ -198,12 +196,12 @@ struct AMDPALBackend : public Backend {
 };
 
 struct NVVMBackend : public Backend {
-    explicit NVVMBackend(DeviceBackends& b, World& src) : Backend(b, src) {
+    explicit NVVMBackend(Offload& b) : Backend(b) {
         b.register_intrinsic(Intrinsic::NVVM, *this);
     }
 
     std::unique_ptr<CodeGen> create_cg() override {
-        return std::make_unique<llvm::NVVMCodeGen>(*device_code_, kernel_configs_, backends_.opt(), backends_.debug());
+        return std::make_unique<llvm::NVVMCodeGen>(*device_code_, kernel_configs_, backends_.thorin().opt(), backends_.thorin().debug());
     }
 
     std::string file_extension() override {
@@ -213,7 +211,7 @@ struct NVVMBackend : public Backend {
 #endif
 
 struct HLSBackend : public Backend {
-    explicit HLSBackend(DeviceBackends& b, World& src, std::string& hls_flags) : Backend(b, src), hls_flags_(hls_flags) {
+    explicit HLSBackend(Offload& b) : Backend(b), hls_flags_(b.thorin().hls_flags()) {
         b.register_intrinsic(Intrinsic::HLS, *this);
     }
 
@@ -226,7 +224,7 @@ struct HLSBackend : public Backend {
         hls_annotate_top(*device_code_, top2kernel, kernel_configs_);
         hls_kernel_launch(*device_code_, hls_host_params);
 
-        return std::make_unique<c::CodeGen>(*device_code_, kernel_configs_, c::Lang::HLS, backends_.debug(), hls_flags_);
+        return std::make_unique<c::CodeGen>(*device_code_, kernel_configs_, c::Lang::HLS, backends_.thorin().debug(), hls_flags_);
     }
 
     std::string file_extension() override {
@@ -236,22 +234,28 @@ struct HLSBackend : public Backend {
     std::string& hls_flags_;
 };
 
-DeviceBackends::DeviceBackends(World& world, int opt, bool debug, std::string& hls_flags) : world_(world), opt_(opt), debug_(debug) {
-    register_backend(std::make_unique<CudaBackend>(*this, world_));
-    register_backend(std::make_unique<OpenCLBackend>(*this, world_));
+Offload::Offload(Thorin& thorin) : thorin_(thorin) {
+    register_backend(std::make_unique<CudaBackend>(*this));
+    register_backend(std::make_unique<OpenCLBackend>(*this));
 #if THORIN_ENABLE_LLVM
-    register_backend(std::make_unique<AMDHSABackend>(*this, world_));
-    register_backend(std::make_unique<AMDPALBackend>(*this, world_));
-    register_backend(std::make_unique<NVVMBackend>(*this, world_));
+    register_backend(std::make_unique<AMDHSABackend>(*this));
+    register_backend(std::make_unique<AMDPALBackend>(*this));
+    register_backend(std::make_unique<NVVMBackend>(*this));
 #endif
 #if THORIN_ENABLE_SPIRV
-    register_backend(std::make_unique<OpenCLSPIRVBackend>(*this, world_));
-    register_backend(std::make_unique<LevelZeroSPIRVBackend>(*this, world_));
-    register_backend(std::make_unique<VulkanSPIRVBackend>(*this, world_));
+    register_backend(std::make_unique<OpenCLSPIRVBackend>(*this));
+    register_backend(std::make_unique<LevelZeroSPIRVBackend>(*this));
+    register_backend(std::make_unique<VulkanSPIRVBackend>(*this));
 #endif
-    register_backend(std::make_unique<HLSBackend>(*this, world_, hls_flags));
+    register_backend(std::make_unique<HLSBackend>(*this));
+}
 
-    lower_offload_intrinsics(world, *this);
+void Offload::offload(World& src) {
+    for (auto& b : backends_) {
+        b->importer_ = std::make_unique<Importer>(src, *b->device_code_);
+    }
+
+    lower_offload_intrinsics(thorin().world(), *this);
 
     for (auto& backend : backends_) {
         if (backend->world().empty())
@@ -260,5 +264,6 @@ DeviceBackends::DeviceBackends(World& world, int opt, bool debug, std::string& h
         backend->prepare_kernel_configs();
     }
 }
+
 
 }
