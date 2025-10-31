@@ -124,7 +124,12 @@ std::vector<Id> CodeGen::emit_intrinsic(const App& app, const Continuation* intr
     } else if (intrinsic->name() == "spirv.operation") {
         if (auto spv_operation_lit = app.arg(1)->isa<PrimLit>()) {
             auto spv_operation = spv_operation_lit->value().get_u32();
-            auto args = emit_args(app.arg(2)->ops());
+            std::vector<unsigned int> args;
+            if (app.arg(2)->type()->isa<TupleType>()) {
+                args = emit_args(app.arg(2)->ops());
+            } else {
+                args = emit_args({ app.arg(2) });
+            }
 
             spv::Op op = static_cast<spv::Op>(spv_operation);
             auto produced_types = get_produced_types();
