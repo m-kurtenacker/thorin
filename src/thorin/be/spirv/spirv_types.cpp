@@ -298,14 +298,14 @@ ConvertedType CodeGen::convert(const Type* type) {
         case Node_ExternType: {
             const ExternType* extern_type = type->as<ExternType>();
 
-            auto op_type_str = extern_type->args()[0];
+            auto op_type_str = extern_type->op(0)->as<DefiniteArray>()->as_string();
             spv::Op op_type = static_cast<spv::Op>(stoi(op_type_str));
 
             std::vector<Id> component_ids;
 
             std::optional<ConvertedType::Layout> member_type_layout = std::nullopt;
-            for (int i = 1; i < extern_type->args().size(); i++) {
-                auto component_str = extern_type->args()[i];
+            for (int i = 1; i < extern_type->num_ops(); i++) {
+                auto component_str = extern_type->op(i)->as<DefiniteArray>()->as_string();
                 if (component_str == "half") {
                     auto member_type = convert(world().type_qf16());
                     component_ids.push_back(member_type.id);
