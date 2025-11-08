@@ -4,6 +4,7 @@
 #include "thorin/world.h"
 #include "thorin/analyses/scope.h"
 #include "thorin/analyses/cfg.h"
+#include "thorin/offload/offload.h"
 #include "thorin/transform/rewrite.h"
 
 namespace thorin {
@@ -15,7 +16,7 @@ bool is_closure_convertible(Continuation* cont) {
 }
 
 struct ClosureConverter {
-    ClosureConverter(World& src, World& dst) : src_(src), dst_(dst), root_rewriter_(*this, nullptr, nullptr), forest_(src) {
+    ClosureConverter(World& src, World& dst, Thorin& thorin) : src_(src), dst_(dst), thorin_(thorin), root_rewriter_(*this, nullptr, nullptr), forest_(src) {
         assert(&src != &dst);
     }
 
@@ -299,6 +300,7 @@ struct ClosureConverter {
     World& dst_;
     World& src() { return src_; }
     World& dst() { return dst_; }
+    Thorin& thorin_;
 
     ScopeRewriter root_rewriter_;
     ScopesForest forest_;
@@ -497,117 +499,94 @@ const Def* ClosureConverter::ScopeRewriter::rewrite(const Def* const odef) {
 
         if (ncont) {
             if (ncont->is_accelerator()) {
-                struct KernelLiftCtx {
-                    Continuation* wrapper;
-                    const Def* mem;
+                struct S : OffloadSite {
+                    const Def*& host_mem_;
+                    std::vector<const Def*> lifted_args;
+                    std::vector<const Type*> env_types;
+
+                    void add_host_arg(const Def* def) override {
+                        lifted_args.push_back(def);
+                        env_types.push_back(def->type());
+                    }
+
+                    const Def*& host_mem() {
+                        return host_mem_;
+                    }
+
+                    S(Rewriter* r, const Def*& mem) : OffloadSite(r), host_mem_(mem) {}
+                };
+                assert(is_mem(nargs[0]));
+                S site = S(this, nargs[0]);
+
+                auto backend = converter_.thorin_.offload().find_backend_for_intrinsic(ncont->intrinsic());
+
+                struct K : OffloadSite::Kernel {
+                    size_t idx;
+                    ScopeRewriter* body_rewriter;
+                    Array<const Def*> args;
+                    const Def*& mem_;
+
+                    const Def*& find_mem() {
+                        for (size_t i = 0; i < args.size(); i++) {
+                            if (is_mem(args[i]))
+                                return args[i];
+                        }
+                        throw std::runtime_error("no mem");
+                    }
+
+                    const Def*& mem() {
+                        return mem_;
+                    }
+
+                    K(Continuation* old, Continuation* w, size_t i, ScopeRewriter* r) : args(w->params_as_defs()), mem_(find_mem()), Kernel(old, w), idx(i), body_rewriter(r) {}
+
+                    void insert_mapping(const Def* old, const Def* def) override {
+                        body_rewriter->insert(old, def);
+                    }
+
+                    const Def* get_mapping(const Def* old) override {
+                        return body_rewriter->instantiate(old);
+                    }
                 };
 
-                std::vector<KernelLiftCtx> lifted_kernels;
-
-                // iterate over the kernels and register params for them
+                // find the kernels and make a K object for each
                 for (size_t i = 0; i < ncont->num_params(); i++) {
                     if (!nargs[i]) {
-                        //auto okernel = app->arg(i)->as_nom<Continuation>();
-                        Continuation* wrapper = dst().continuation(dst().fn_type({dst().mem_type(), dst().return_type({dst().mem_type()})}));
-                        lifted_kernels.push_back({
-                            .wrapper = wrapper,
-                            .mem = wrapper->mem_param(),
-                        });
+                        auto old_kernel = app->arg(i)->as_nom<Continuation>();
+                        auto& scope = converter_.forest_.get_scope(old_kernel);
+                        children_.emplace_back(std::make_unique<ScopeRewriter>(converter_, &scope, this));
+
+                        Continuation* wrapper = dst().continuation(dst().fn_type(instantiate(old_kernel->type())->as<FnType>()->types()));
+                        site.kernels_.emplace_back(std::make_unique<K>(old_kernel, wrapper, i, children_.back().get()));
                     }
                 }
 
-                struct {
-                    World& world;
-                    std::vector<KernelLiftCtx>& lifted_kernels;
-                    DefMap<int> map;
-                    std::vector<const Def*> lifted_args;
-                    std::vector<const Type*> env_types;
-                    size_t count = 0;
-
-                    const Def* flatten(const Def* def, Continuation* wrapper) {
-                        auto t = def->type();
-
-                        if (auto tuple_t = t->isa<TupleType>()) {
-                            std::vector<const Def*> ops;
-                            for (size_t i = 0; i < tuple_t->num_ops(); i++)
-                                ops.push_back(flatten(world.extract(def, i), wrapper));
-                            if (!wrapper)
-                                return nullptr;
-                            return world.tuple(ops);
-                        } else if (auto struct_t = t->isa<StructType>()) {
-                            std::vector<const Def*> ops;
-                            for (size_t i = 0; i < struct_t->num_ops(); i++)
-                                ops.push_back(flatten(world.extract(def, i), wrapper));
-                            if (!wrapper)
-                                return nullptr;
-                            return world.struct_agg(struct_t, ops);
-                        } else if (auto closure_t = t->isa<ClosureType>()) {
-                            world.ELOG("Closures cannot be captured in kernels for now.");
-                            abort();
-                        } else {
-                            auto found = map.find(def);
-                            if (found != map.end()) {
-                                if (!wrapper)
-                                    return nullptr;
-                                return wrapper->param(2 + found->second);
-                            }
-                            assert(!wrapper);
-                            if (!wrapper) {
-                                env_types.push_back(t);
-                                lifted_args.push_back(def);
-                                for (auto& k : lifted_kernels) {
-                                    k.wrapper->append_param(t);
-                                }
-                                map[def] = count++;
-                                return nullptr;
-                            }
-                        }
-                    }
-                } flattener = { dst(), lifted_kernels };
-
                 // iterate over the kernels and register params for them
-                for (size_t i = 0; i < ncont->num_params(); i++) {
-                    if (!nargs[i]) {
-                        auto okernel = app->arg(i)->as_nom<Continuation>();
-                        for (auto ofv : converter_.lookup(okernel).free_vars) {
-                            auto fv = instantiate(ofv);
-                            flattener.flatten(fv, nullptr);
-                        }
+                for (auto& k : site.kernels_) {
+                    for (auto ofv : converter_.lookup(k->old_kernel).free_vars) {
+                        if (backend)
+                            backend->lower_env_param(ofv, site);
+                        else
+                            default_lower_env_param(ofv, site);
                     }
                 }
 
                 // we add them once to the call
-                // we're going to change the type of the accelarator ofc
+                // we're going to change the type of the accelerator ofc
                 std::vector<const Type*> nintrinsic_types;
                 for (auto t : ncont->type()->copy_types())
                     nintrinsic_types.push_back(t);
-                for (auto env : flattener.lifted_args) {
+                for (auto env : site.lifted_args) {
                     nintrinsic_types.push_back(env->type());
                     nargs.push_back(env);
                 }
 
-                size_t j = 0;
-                for (size_t i = 0; i < ncont->num_params(); i++) {
-                    if (!nargs[i]) {
-                        auto old_kernel = app->arg(i)->as_nom<Continuation>();
+                for (auto& kernel : site.kernels_) {
+                    auto& k = *reinterpret_cast<K*>(&*kernel);
+                    k.wrapper->jump(k.body_rewriter->rewrite(k.old_kernel), k.args);
 
-                        ScopeRewriter* body_rewriter;
-                        auto& scope = converter_.forest_.get_scope(old_kernel);
-                        children_.emplace_back(std::make_unique<ScopeRewriter>(converter_, &scope, this));
-                        body_rewriter = children_.back().get();
-
-                        auto& new_kernel = lifted_kernels[j++];
-                        for (auto ofv : converter_.lookup(old_kernel).free_vars) {
-                            auto fv = instantiate(ofv);
-                            auto inner = flattener.flatten(fv, new_kernel.wrapper);
-                            body_rewriter->insert(ofv, inner);
-                        }
-
-                        new_kernel.wrapper->jump(body_rewriter->rewrite(old_kernel), { new_kernel.mem, new_kernel.wrapper->ret_param() });
-
-                        nargs[i] = new_kernel.wrapper;
-                        nintrinsic_types[i] = new_kernel.wrapper->type();
-                    }
+                    nargs[k.idx] = k.wrapper;
+                    nintrinsic_types[k.idx] = k.wrapper->type();
                 }
 
                 auto nintrinsic = dst().continuation(dst().fn_type(nintrinsic_types), ncont->attributes(),ncont->debug());
@@ -656,7 +635,7 @@ void validate_all_returning_functions_top_level(World& world) {
 void lift(Thorin& thorin) {
     auto& src = thorin.world_container();
     auto dst = std::make_unique<World>(*src);
-    ClosureConverter converter(*src, *dst);
+    ClosureConverter converter(*src, *dst, thorin);
 
     converter.scan();
 

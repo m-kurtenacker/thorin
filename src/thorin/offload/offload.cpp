@@ -57,14 +57,18 @@ void Offload::register_intrinsic(thorin::Intrinsic intrinsic, Backend& backend) 
     intrinsics_[intrinsic] = &backend;
 }
 
+Backend* Offload::find_backend_for_intrinsic(Intrinsic intrinsic) {
+    auto handler = intrinsics_.find(intrinsic);
+    if (handler == intrinsics_.end())
+        return nullptr;
+    return handler->second;
+}
+
 std::tuple<std::string, std::string> Offload::register_kernel_for_offloading(const App* launch, Continuation* kernel, std::unique_ptr<KernelConfig> config) {
     auto found = unique_kernel_.find(kernel);
     if (found != unique_kernel_.end())
         return found->second;
-    Continuation* intrinsic_cont = launch->callee()->as_nom<Continuation>();
-    auto handler = intrinsics_.find(intrinsic_cont->intrinsic());
-    assert(handler != intrinsics_.end());
-    auto backend = handler->second;
+    auto backend = find_backend_for_intrinsic(launch->callee()->as_nom<Continuation>()->intrinsic());
 
     auto kernel_name = kernel->unique_name();
     auto filename = thorin().world().name() + backend->file_extension();
@@ -84,6 +88,62 @@ std::tuple<std::string, std::string> Offload::register_kernel_for_offloading(con
 
     backend->kernel_configs_[kernel] = std::move(config);
     return r;
+}
+
+using GetProcessedFn = std::function<const Def*(const Def*)>;
+using RebuildFn = std::function<const Def*(GetProcessedFn)>;
+using ProcessMemberFn = std::function<void(const Def*, Defs, RebuildFn)>;
+using ProcessBaseFn = std::function<void(const Def*)>;
+
+void flatten(const Def* def, World& world, ProcessMemberFn member, ProcessBaseFn base) {
+    auto t = def->type();
+
+    if (auto tuple_t = t->isa<TupleType>()) {
+        std::vector<const Def*> old_ops;
+        for (size_t i = 0; i < tuple_t->num_ops(); i++)
+            old_ops.push_back(world.extract(def, i));
+        RebuildFn rebuild = [&](auto rebuild_op) -> const Def* {
+            std::vector<const Def*> ops;
+            for (auto old : old_ops)
+                ops.push_back(rebuild_op(old));
+            return world.tuple(ops);
+        };
+        member(def, old_ops, rebuild);
+    } else if (auto struct_t = t->isa<StructType>()) {
+        std::vector<const Def*> old_ops;
+        for (size_t i = 0; i < struct_t->num_ops(); i++)
+            old_ops.push_back(world.extract(def, i));
+        RebuildFn rebuild = [&](auto rebuild_op) -> const Def* {
+            std::vector<const Def*> ops;
+            for (auto old : old_ops)
+                ops.push_back(rebuild_op(old));
+            return world.struct_agg(struct_t, ops);
+        };
+        member(def, old_ops, rebuild);
+    } else {
+        base(def);
+    }
+}
+
+void default_lower_env_param(const Def* def, OffloadSite& context) {
+    auto& world = context.rewriter->dst();
+    ProcessMemberFn lower_member = [&](const Def* m, Defs ops, auto rebuild) -> void {
+        // aggregate members are deconstructed and rebuilt for each kernel
+        for (auto op : ops)
+            default_lower_env_param(op, context);
+        for (auto& k : context.kernels_) {
+            k->insert_mapping(m, rebuild([&](const Def* old) { return k->get_mapping(old); }));
+        }
+    };
+
+    auto lower_base = [&](const Def* old) -> void {
+        auto fv = context.rewriter->instantiate(old);
+        context.add_host_arg(fv);
+        for (auto& k : context.kernels_) {
+            k->insert_mapping(old, k->wrapper->append_param(fv->type()));
+        }
+    };
+    flatten(def, world, lower_member, lower_base);
 }
 
 struct CudaBackend : public Backend {
