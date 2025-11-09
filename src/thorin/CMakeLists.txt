@@ -51,8 +51,6 @@ set(THORIN_SOURCES
     tables/primtypetable.h
     tables/mathoptable.h
     transform/cleanup_world.cpp
-    transform/closure_conversion.cpp
-    transform/closure_conversion.h
     transform/codegen_prepare.h
     transform/codegen_prepare.cpp
     transform/dead_load_opt.cpp
@@ -69,8 +67,6 @@ set(THORIN_SOURCES
     transform/inliner.h
     transform/lift.cpp
     transform/lift.h
-    transform/lift_builtins.cpp
-    transform/lift_builtins.h
     transform/lower_closure_env.cpp
     transform/lower_closure_env.h
     transform/mangle.cpp
