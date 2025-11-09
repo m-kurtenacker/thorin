@@ -231,6 +231,13 @@ struct FileBuilder {
         return id;
     }
 
+    void define_type(spv::Op op, Id id, const std::vector<uint32_t>& operands) {
+        types_constants.begin_op(op, 2 + operands.size());
+        types_constants.ref_id(id);
+        for (auto o : operands)
+            types_constants.literal_int(o);
+    }
+
     void decorate(Id target, spv::Decoration decoration, std::vector<uint32_t> extra = {}) {
         annotations.begin_op(spv::Op::OpDecorate, 3 + extra.size());
         annotations.ref_id(target);
