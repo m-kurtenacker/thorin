@@ -296,15 +296,23 @@ ConvertedType CodeGen::convert(const Type* type) {
 
         case Node_ExternType: {
             const ExternType* extern_type = type->as<ExternType>();
-            // extern_type xxx_t = "spirv.type" { OpTypeXXX as u32, [literal as u32, "literal", ()], def_operand, ... }
+            // extern_type xxx_t = "spirv.type" { OpTypeXXX as u32, (literal as u32, "literal", ()), def_operand, ... }
             if (extern_type->name() == "spirv.type") {
                 SpvId id = builder_->generate_fresh_id();
                 types_[extern_type] = converted = { id };
                 spv::Op op = static_cast<spv::Op>(thorin::primlit_value<uint32_t>(extern_type->op(0)->as<Literal>()));
-                auto pattern = extern_type->op(1)->as<DefiniteArray>();
+
+                std::vector<const Def*> pattern;
+                auto pattern_def = extern_type->op(1);
+                if (auto pattern_tuple = pattern_def->isa<Tuple>()) {
+                    pattern.insert(pattern.begin(), pattern_tuple->ops().begin(), pattern_tuple->ops().end());
+                } else {
+                    pattern.push_back(pattern_def);
+                }
+
                 std::vector<uint32_t> o;
                 size_t src_op = 2;
-                for (auto p : pattern->ops()) {
+                for (auto p : pattern) {
                     if (auto lit = p->isa<Literal>()) {
                         o.push_back(thorin::primlit_value<uint32_t>(lit));
                         continue;
@@ -328,6 +336,7 @@ ConvertedType CodeGen::convert(const Type* type) {
             } else {
                 assert("Unknown extern type");
             }
+            break;
         }
 
         case Node_MemType: {
