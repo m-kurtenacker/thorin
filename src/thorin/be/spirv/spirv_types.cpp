@@ -294,6 +294,42 @@ ConvertedType CodeGen::convert(const Type* type) {
             break;
         }
 
+        case Node_ExternType: {
+            const ExternType* extern_type = type->as<ExternType>();
+            // extern_type xxx_t = "spirv.type" { OpTypeXXX as u32, [literal as u32, "literal", ()], def_operand, ... }
+            if (extern_type->name() == "spirv.type") {
+                SpvId id = builder_->generate_fresh_id();
+                types_[extern_type] = converted = { id };
+                spv::Op op = static_cast<spv::Op>(thorin::primlit_value<uint32_t>(extern_type->op(0)->as<Literal>()));
+                auto pattern = extern_type->op(1)->as<DefiniteArray>();
+                std::vector<uint32_t> o;
+                size_t src_op = 2;
+                for (auto p : pattern->ops()) {
+                    if (auto lit = p->isa<Literal>()) {
+                        o.push_back(thorin::primlit_value<uint32_t>(lit));
+                        continue;
+                    }
+                    if (auto str = p->isa<DefiniteArray>()) {
+                        auto lits = builder::make_literal_string(str->as_string());
+                        o.insert(o.begin(), lits.begin(), lits.end());
+                        continue;
+                    }
+                    if (is_unit(p)) {
+                        if (src_op >= extern_type->num_ops()) {
+                            world().edef(extern_type, "Not enough operands, pattern item requires {} operand but only {} are available", src_op, extern_type->num_ops());
+                        }
+                        auto def = extern_type->op(src_op++);
+                        o.push_back(emit_constant(def));
+                        continue;
+                    }
+                    world().edef(extern_type, "Invalid pattern item");
+                }
+                builder_->define_type(op, id, o);
+            } else {
+                assert("Unknown extern type");
+            }
+        }
+
         case Node_MemType: {
             assert(false && "MemType cannot be converted to SPIR-V");
         }
