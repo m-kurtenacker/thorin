@@ -1,6 +1,7 @@
 #include "offload.h"
 
 #include "thorin/be/spirv/spirv.h"
+#include "thorin/transform/fungl_lower.h"
 
 namespace thorin {
 
@@ -44,6 +45,7 @@ struct VulkanSPIRVBackend : public Backend {
         spirv::Target target;
         target.bugs = {};
         target.dialect = spirv::Target::Vulkan;
+        fungl_lower(device_code_, true);
         return std::make_unique<spirv::CodeGen>(*device_code_, target, backends_.thorin().debug(), &kernel_configs_);
     }
 

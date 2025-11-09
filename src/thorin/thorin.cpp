@@ -12,6 +12,7 @@
 #include "thorin/transform/lift.h"
 #include "thorin/transform/lower_closure_env.h"
 #include "thorin/transform/split_slots.h"
+#include "thorin/transform/fungl_lower.h"
 
 namespace thorin {
 
@@ -51,6 +52,7 @@ if (debug_passes) world().dump_scoped(); \
     //RUN_PASS(cleanup())
     RUN_PASS(codegen_prepare(*this))
     offload_->offload(world());
+    fungl_lower(world_container(), false);
 }
 
 void Thorin::cleanup() { cleanup_world(world_container()); }
