@@ -89,6 +89,16 @@ protected:
     friend Offload;
 };
 
+void register_c_offloading_backends(Offload&);
+
+#if THORIN_ENABLE_SPIRV
+void register_spirv_offloading_backends(Offload&);
+#endif
+
+#if THORIN_ENABLE_LLVM
+void register_llvm_offloading_backends(Offload&);
+#endif
+
 }
 
 #endif

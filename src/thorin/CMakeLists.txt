@@ -38,6 +38,7 @@ set(THORIN_SOURCES
     be/c/c.h
     offload/offload.cpp
     offload/offload.h
+    offload/offload_c.cpp
     offload/lower_offload_intrinsics.cpp
     offload/lower_offload_intrinsics.h
     offload/runtime.h
@@ -106,6 +107,7 @@ set(THORIN_SOURCES
 
 if(LLVM_FOUND)
     list(APPEND THORIN_SOURCES
+        offload/offload_llvm.cpp
         be/llvm/cpu.cpp
         be/llvm/cpu.h
         be/llvm/llvm.cpp
@@ -131,6 +133,7 @@ endif()
 
 if(THORIN_ENABLE_SPIRV)
     list(APPEND THORIN_SOURCES
+        offload/offload_spirv.cpp
         be/spirv/spirv.cpp
         be/spirv/spirv_types.cpp
         be/spirv/spirv_instructions.cpp
