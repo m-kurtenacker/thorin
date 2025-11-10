@@ -374,12 +374,13 @@ void emit_sync(RuntimeAPI& api, Continuation* continuation) {
 
 auto build_setup_args_fn(World& world, const Def*& mem, ArrayRef<const Def*> args) {
     auto ptr_ty = world.ptr_type(world.indefinite_array_type(world.type_pu8()));
-    auto callback_fn_t = world.closure_type({world.mem_type(), world.type_qs32(), world.ptr_type(
+    auto callback_fn_t = world.closure_type({world.mem_type(), world.type_pu64(), world.type_qs32(), world.ptr_type(
             world.indefinite_array_type(ptr_ty)), world.return_type({world.mem_type()})});
     Continuation* setup_args_fn = world.continuation(
-            world.fn_type({world.mem_type(), callback_fn_t, world.return_type({world.mem_type()})}));
+            world.fn_type({world.mem_type(), world.type_pu64(), callback_fn_t, world.return_type({world.mem_type()})}));
     //const Def* mem = setup_args_fn->mem_param();
-    auto callback = setup_args_fn->param(1);
+    auto pipeline_handle = setup_args_fn->param(1);
+    auto callback = setup_args_fn->param(2);
     auto alloc = [&](const Type* t) {
         auto r = world.alloc(t, mem);
         mem = world.extract(r, static_cast<uint32_t>(0));
@@ -394,7 +395,7 @@ auto build_setup_args_fn(World& world, const Def*& mem, ArrayRef<const Def*> arg
     auto dummy_closure = world.closure(world.closure_type(setup_args_fn->type()->types()));
     auto self_param = setup_args_fn->append_param(dummy_closure->type());
     auto env = world.closure_env(pointers->type(), setup_args_fn->mem_param(), self_param);
-    setup_args_fn->set_body(world.app(callback, { world.extract(env, 0u), world.literal_qs32(args.size(), {}), world.bitcast(callback_fn_t->types()[2], world.extract(env, 1)), setup_args_fn->ret_param() }));
+    setup_args_fn->set_body(world.app(callback, { world.extract(env, 0u), pipeline_handle, world.literal_qs32(args.size(), {}), world.bitcast(callback_fn_t->types()[3], world.extract(env, 1)), setup_args_fn->ret_param() }));
     // setup function has to be a closure
     dummy_closure->set_fn(setup_args_fn, self_param->index());
     dummy_closure->set_env(pointers);
