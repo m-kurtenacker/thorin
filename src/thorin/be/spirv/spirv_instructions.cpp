@@ -255,6 +255,9 @@ std::vector<Id> CodeGen::emit_device_function_call(const App& app, const Continu
         while (auto bitcast = args[1]->isa<Bitcast>())
             args[1] = bitcast->from();
         return { bb->ext_instruction(convert(get_produced_type()).id, { .set_name = "OpenCL.std", .id = OpenCLLIB::Printf }, emit_args(args)) };
+    } else if (device_fn->name() == "sample_implicit_lod") {
+        Array<const Def*> args = app.args().skip_back();
+        return { bb->op_with_result(spv::Op::OpImageSampleImplicitLod, convert(get_produced_type()).id, emit_args(args)) };
     }
     world().ELOG("thorin/spirv: Device function '{}' isn't recognised", device_fn->name());
     exit(-1);
