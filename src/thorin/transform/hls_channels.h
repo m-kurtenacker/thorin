@@ -24,7 +24,7 @@ class World;
  * provides hls_top parameters for hls runtime
  */
 DeviceParams hls_channels(World&, Importer&, Top2Kernel&);
-void hls_annotate_top(World&, const Top2Kernel&, Cont2Config&);
+void hls_annotate_top(World&, const Top2Kernel&, KernelConfigs&);
 
 }
 

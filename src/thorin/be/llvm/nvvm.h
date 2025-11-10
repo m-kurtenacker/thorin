@@ -14,7 +14,7 @@ namespace llvm = ::llvm;
 
 class NVVMCodeGen : public CodeGen {
 public:
-    NVVMCodeGen(World&, const Cont2Config&, int opt, bool debug); // NVVM-specific optimizations are run in the runtime
+    NVVMCodeGen(World&, const KernelConfigs&, int opt, bool debug); // NVVM-specific optimizations are run in the runtime
 
 protected:
     void emit_fun_decl_hook(Continuation*, llvm::Function*) override;
@@ -37,7 +37,7 @@ private:
     llvm::Function* get_texture_handle_fun(llvm::IRBuilder<>&);
     llvm::GlobalVariable* resolve_global_variable(const Param*);
 
-    const Cont2Config& kernel_config_;
+    const KernelConfigs& kernel_configs_;
     ParamMap<llvm::MDNode*> metadata_;
 };
 

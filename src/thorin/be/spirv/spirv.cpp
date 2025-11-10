@@ -95,8 +95,8 @@ Id FileBuilder::u32_constant(uint32_t pattern) {
     return constant(u32_t(), { pattern });
 }
 
-CodeGen::CodeGen(World& world, Target& target_info, bool debug, const Cont2Config* kernel_config)
-        : thorin::CodeGen(world, debug), target_info_(target_info), kernel_config_(kernel_config)
+CodeGen::CodeGen(World& world, Target& target_info, bool debug, const KernelConfigs* kernel_configs)
+        : thorin::CodeGen(world, debug), target_info_(target_info), kernel_configs_(kernel_configs)
 {}
 
 void CodeGen::emit_stream(std::ostream& out) {
@@ -142,9 +142,9 @@ void CodeGen::emit_stream(std::ostream& out) {
 
     int entry_points_count = 0;
     for (auto& cont : world().copy_continuations()) {
-        if (cont->is_exported() && kernel_config_) {
-            auto found = kernel_config_->find(cont);
-            if (found == kernel_config_->end())
+        if (cont->is_exported() && kernel_configs_) {
+            auto found = kernel_configs_->find(cont->name());
+            if (found == kernel_configs_->end())
                 continue;
 
             assert(defs_.contains(cont));
@@ -209,7 +209,7 @@ FnBuilder& CodeGen::get_fn_builder(thorin::Continuation* continuation) {
 
     auto& fn = *(builder_->fn_builders_[continuation] = std::make_unique<FnBuilder>(*builder_));
     auto fn_type = continuation->type();
-    if (kernel_config_ && kernel_config_->contains(continuation)) {
+    if (kernel_configs_ && kernel_configs_->find(continuation->name()) != kernel_configs_->end()) {
         fn_type = patch_entry_point_signature(fn_type);
     }
     fn.fn_type = convert(fn_type).id;
@@ -255,7 +255,7 @@ void CodeGen::prepare(thorin::Continuation* cont, FnBuilder* fn) {
         world().ddef(cont, "Emitting {} as return block", cont);
 
     if (entry_ == cont) {
-        bool entry_point = kernel_config_ && kernel_config_->contains(entry_);
+        bool entry_point = kernel_configs_->find(entry_->name()) != kernel_configs_->end();
         for (auto param : cont->params()) {
             if (!should_emit(param->type())) {
                 // Nothing

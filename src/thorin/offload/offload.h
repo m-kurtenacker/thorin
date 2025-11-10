@@ -83,7 +83,7 @@ protected:
     std::unique_ptr<World> device_code_;
     std::unique_ptr<Importer> importer_;
 
-    Cont2Config kernel_configs_;
+    KernelConfigs kernel_configs_;
 
     void prepare_kernel_configs();
     friend Offload;

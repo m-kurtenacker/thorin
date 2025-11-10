@@ -17,9 +17,9 @@ enum class Lang : uint8_t { C99, HLS, CUDA, OpenCL };
 
 class CodeGen : public thorin::CodeGen {
 public:
-    CodeGen(World& world, const Cont2Config& kernel_config, Lang lang, bool debug, std::string& flags)
+    CodeGen(World& world, const KernelConfigs& kernel_configs, Lang lang, bool debug, std::string& flags)
         : thorin::CodeGen(world, debug)
-        , kernel_config_(kernel_config)
+        , kernel_configs_(kernel_configs)
         , lang_(lang)
         , debug_(debug)
         , flags_(flags)
@@ -28,7 +28,7 @@ public:
     void emit_stream(std::ostream& stream) override;
 
 private:
-    const Cont2Config& kernel_config_;
+    const KernelConfigs& kernel_configs_;
     Lang lang_;
     bool debug_;
     std::string flags_;

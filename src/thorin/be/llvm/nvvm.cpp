@@ -19,9 +19,9 @@
 
 namespace thorin::llvm {
 
-NVVMCodeGen::NVVMCodeGen(World& w, const Cont2Config& kernel_config, int /* opt */, bool debug)
+NVVMCodeGen::NVVMCodeGen(World& w, const KernelConfigs& kernel_configs, int /* opt */, bool debug)
     : CodeGen(w, llvm::CallingConv::C, llvm::CallingConv::PTX_Device, llvm::CallingConv::PTX_Kernel, 0, debug)
-    , kernel_config_(kernel_config)
+    , kernel_configs_(kernel_configs)
 {
     auto triple = llvm::Triple(llvm::sys::getDefaultTargetTriple());
     if (triple.isArch32Bit()) {
@@ -86,8 +86,8 @@ void NVVMCodeGen::emit_fun_decl_hook(Continuation* continuation, llvm::Function*
 
     append_metadata(f, "kernel", 1);
 
-    auto config = kernel_config_.find(continuation);
-    if (config != kernel_config_.end()) {
+    auto config = kernel_configs_.find(continuation->name());
+    if (config != kernel_configs_.end()) {
         auto block = config->second->as<GPUKernelConfig>()->block_size();
         if (std::get<0>(block) > 0 && std::get<1>(block) > 0 && std::get<2>(block) > 0) {
             append_metadata(f, "maxntidx", std::get<0>(block));

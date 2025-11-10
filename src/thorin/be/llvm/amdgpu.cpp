@@ -7,17 +7,17 @@
 
 namespace thorin::llvm {
 
-AMDGPUCodeGen::AMDGPUCodeGen(World& w, llvm::CallingConv::ID function_calling_convention, llvm::CallingConv::ID device_calling_convention, llvm::CallingConv::ID kernel_calling_convention, const Cont2Config& kernel_config, int opt, bool debug)
+AMDGPUCodeGen::AMDGPUCodeGen(World& w, llvm::CallingConv::ID function_calling_convention, llvm::CallingConv::ID device_calling_convention, llvm::CallingConv::ID kernel_calling_convention, const KernelConfigs& kernel_config, int opt, bool debug)
     : CodeGen(w, function_calling_convention, device_calling_convention, kernel_calling_convention, opt, debug)
-    , kernel_config_(kernel_config) {}
+    , kernel_configs_(kernel_config) {}
 
 //------------------------------------------------------------------------------
 // Kernel code
 //------------------------------------------------------------------------------
 
 void AMDGPUCodeGen::emit_fun_decl_hook(Continuation* continuation, llvm::Function* f) {
-    auto config = kernel_config_.find(continuation);
-    if (config != kernel_config_.end()) {
+    auto config = kernel_configs_.find(continuation->name());
+    if (config != kernel_configs_.end()) {
         auto block = config->second->as<GPUKernelConfig>()->block_size();
         if (std::get<0>(block) > 0 && std::get<1>(block) > 0 && std::get<2>(block) > 0) {
             Array<llvm::Metadata*> annotation_values_wgsize(3);

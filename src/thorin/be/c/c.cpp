@@ -74,10 +74,10 @@ enum class HlsInterface : uint8_t {
 
 class CCodeGen : public thorin::Emitter<std::string, std::string, BB, CCodeGen> {
 public:
-    CCodeGen(std::unique_ptr<World>&& w, const Cont2Config& kernel_config, Stream& stream, Lang lang, bool debug, std::string& flags)
+    CCodeGen(std::unique_ptr<World>&& w, const KernelConfigs& kernel_configs, Stream& stream, Lang lang, bool debug, std::string& flags)
         : world_(std::move(w))
         , forest_(world())
-        , kernel_config_(kernel_config)
+        , kernel_configs_(kernel_configs)
         , lang_(lang)
         , fn_mem_(world().fn_type({world().mem_type()}))
         , debug_(debug)
@@ -128,7 +128,7 @@ private:
 
     std::unique_ptr<World> world_;
     ScopesForest forest_;
-    const Cont2Config& kernel_config_;
+    const KernelConfigs& kernel_configs_;
     Lang lang_;
     const FnType* fn_mem_;
     bool use_math_ = false;
@@ -1558,22 +1558,22 @@ std::string CCodeGen::emit_fun_head(Continuation* cont, bool is_proto) {
     StringStream s;
 
     // Emit function qualifiers
-    auto config = cont->is_exported() && kernel_config_.count(cont)
-        ? kernel_config_.find(cont)->second.get() : nullptr;
+    auto config = cont->is_exported() && kernel_configs_.count(cont->name())
+        ? kernel_configs_.find(cont->name())->second.get() : nullptr;
     if (cont->is_exported()) {
-        auto config = kernel_config_.find(cont);
+        auto config = kernel_configs_.find(cont->name());
         switch (lang_) {
             default: break;
             case Lang::CUDA:
                 s << "__global__ ";
-                if (!is_proto && config != kernel_config_.end()) {
+                if (!is_proto && config != kernel_configs_.end()) {
                     auto block = config->second->as<GPUKernelConfig>()->block_size();
                     if (std::get<0>(block) > 0 && std::get<1>(block) > 0 && std::get<2>(block) > 0)
                         s.fmt("__launch_bounds__({} * {} * {}) ", std::get<0>(block), std::get<1>(block), std::get<2>(block));
                 }
                 break;
             case Lang::OpenCL:
-                if (!is_proto && config != kernel_config_.end()) {
+                if (!is_proto && config != kernel_configs_.end()) {
                     auto block = config->second->as<GPUKernelConfig>()->block_size();
 
                     // See "Intel FPGA SDK for OpenCL"
@@ -1820,7 +1820,7 @@ std::string CCodeGen::return_name(const ReturnType* fn_type) {
 void CodeGen::emit_stream(std::ostream& stream) {
     Stream s(stream);
     auto copy = clone_world(world());
-    CCodeGen(std::move(copy), kernel_config_, s, lang_, debug_, flags_).emit_module();
+    CCodeGen(std::move(copy), kernel_configs_, s, lang_, debug_, flags_).emit_module();
 }
 
 void emit_c_int(Thorin& thorin, Stream& stream) {

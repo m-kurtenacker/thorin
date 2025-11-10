@@ -12,7 +12,7 @@ namespace llvm = ::llvm;
 
 class AMDGPUCodeGen : public CodeGen {
 public:
-    AMDGPUCodeGen(World&, llvm::CallingConv::ID, llvm::CallingConv::ID, llvm::CallingConv::ID, const Cont2Config&, int opt, bool debug);
+    AMDGPUCodeGen(World&, llvm::CallingConv::ID, llvm::CallingConv::ID, llvm::CallingConv::ID, const KernelConfigs&, int opt, bool debug);
 
 protected:
     void emit_fun_decl_hook(Continuation*, llvm::Function*) override;
@@ -22,7 +22,7 @@ protected:
     llvm::Value* emit_reserve(llvm::IRBuilder<>&, const Continuation*) override;
     std::string get_alloc_name() const override { return "malloc"; }
 
-    const Cont2Config& kernel_config_;
+    const KernelConfigs& kernel_configs_;
 };
 
 }

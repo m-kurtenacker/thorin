@@ -50,7 +50,7 @@ struct BasicBlockBuilder;
 
 class CodeGen : public thorin::CodeGen, public thorin::Emitter<Id, ConvertedType, BasicBlockBuilder*, CodeGen> {
 public:
-    CodeGen(World&, Target&, bool debug, const Cont2Config* = nullptr);
+    CodeGen(World&, Target&, bool debug, const KernelConfigs* = nullptr);
 
     void emit_stream(std::ostream& stream) override;
 
@@ -92,7 +92,7 @@ protected:
 
     Target target_info_;
     FileBuilder* builder_;
-    const Cont2Config* kernel_config_;
+    const KernelConfigs* kernel_configs_;
     DefSet scope_local_defs_;
 
     friend Target;

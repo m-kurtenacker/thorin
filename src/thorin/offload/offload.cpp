@@ -10,26 +10,6 @@ Backend::Backend(Offload& backends) : backends_(backends), device_code_(std::mak
 void Backend::prepare_kernel_configs() {
     //device_code_.opt();
     cleanup_world(device_code_);
-
-    Cont2Config adjusted_configs_map;
-
-    auto conts = device_code_->copy_continuations();
-    for (auto& [continuation, config] : kernel_configs_) {
-        // recover the imported continuation (lost after the call to opt)
-        Continuation* imported = nullptr;
-        for (auto original_cont : conts) {
-            if (!original_cont) continue;
-            if (!original_cont->has_body()) continue;
-            if (original_cont->name() == continuation->name())
-                imported = original_cont;
-        }
-        assert(imported && "we lost a kernel ?");
-        if (!imported) continue;
-
-        adjusted_configs_map[imported] = std::move(config);
-    }
-
-    std::swap(kernel_configs_, adjusted_configs_map);
 }
 
 void Offload::register_backend(std::unique_ptr<Backend> backend) {
@@ -69,7 +49,7 @@ std::tuple<std::string, std::string> Offload::register_kernel_for_offloading(con
     kernel->world().make_external(kernel);
     kernel->destroy("codegen");
 
-    backend->kernel_configs_[kernel] = std::move(config);
+    backend->kernel_configs_[kernel_name] = std::move(config);
     return r;
 }
 

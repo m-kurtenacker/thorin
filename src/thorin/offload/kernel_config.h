@@ -12,7 +12,7 @@ public:
     virtual ~KernelConfig() {}
 };
 
-typedef ContinuationMap<std::unique_ptr<KernelConfig>> Cont2Config;
+typedef std::unordered_map<std::string, std::unique_ptr<KernelConfig>> KernelConfigs;
 
 using GetKernelConfigFn = std::unique_ptr<KernelConfig>(const App*, Continuation*);
 GetKernelConfigFn get_hls_kernel_config;
