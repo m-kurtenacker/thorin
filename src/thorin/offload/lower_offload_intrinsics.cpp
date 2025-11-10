@@ -372,13 +372,13 @@ void emit_sync(RuntimeAPI& api, Continuation* continuation) {
     continuation->set_body(world.app(api.anydsl_sync_thread, {mem, id, ret}));
 }
 
-auto build_setup_args_fn(World& world, ArrayRef<const Def*> args) {
+auto build_setup_args_fn(World& world, const Def*& mem, ArrayRef<const Def*> args) {
     auto ptr_ty = world.ptr_type(world.indefinite_array_type(world.type_pu8()));
     auto callback_fn_t = world.closure_type({world.mem_type(), world.type_qs32(), world.ptr_type(
             world.indefinite_array_type(ptr_ty)), world.return_type({world.mem_type()})});
     Continuation* setup_args_fn = world.continuation(
             world.fn_type({world.mem_type(), callback_fn_t, world.return_type({world.mem_type()})}));
-    const Def* mem = setup_args_fn->mem_param();
+    //const Def* mem = setup_args_fn->mem_param();
     auto callback = setup_args_fn->param(1);
     auto alloc = [&](const Type* t) {
         auto r = world.alloc(t, mem);
@@ -391,12 +391,13 @@ auto build_setup_args_fn(World& world, ArrayRef<const Def*> args) {
         mem = world.store(mem, arg_on_stack, args[i]);
         mem = world.store(mem, world.lea(pointers, world.literal_pu32(i, {}), {}), world.bitcast(ptr_ty, arg_on_stack));
     }
-    setup_args_fn->set_body(world.app(callback, { mem, world.literal_qs32(args.size(), {}), world.bitcast(callback_fn_t->types()[2], pointers), setup_args_fn->ret_param() }));
-    // setup function has to be a closure
     auto dummy_closure = world.closure(world.closure_type(setup_args_fn->type()->types()));
-    auto dummy_index = setup_args_fn->append_param(dummy_closure->type())->index();
-    dummy_closure->set_fn(setup_args_fn, dummy_index);
-    dummy_closure->set_env(world.tuple({}));
+    auto self_param = setup_args_fn->append_param(dummy_closure->type());
+    auto env = world.closure_env(pointers->type(), setup_args_fn->mem_param(), self_param);
+    setup_args_fn->set_body(world.app(callback, { world.extract(env, 0u), world.literal_qs32(args.size(), {}), world.bitcast(callback_fn_t->types()[2], world.extract(env, 1)), setup_args_fn->ret_param() }));
+    // setup function has to be a closure
+    dummy_closure->set_fn(setup_args_fn, self_param->index());
+    dummy_closure->set_env(pointers);
     return dummy_closure;
 };
 
@@ -427,7 +428,7 @@ void emit_vulkan_offload(RuntimeAPI& api, Continuation* continuation) {
     auto struct_t = ret->type()->as<ReturnType>()->types()[1]->as<StructType>();
     std::vector<const Def*> agg;
 
-    agg.push_back(build_setup_args_fn(world, body->args().skip_front(3 + 2 * num_stages)));
+    agg.push_back(build_setup_args_fn(world, mem, body->args().skip_front(3 + 2 * num_stages)));
     agg.push_back(world.literal_pu32(num_stages, {}));
     agg.push_back(world.bitcast(world.ptr_type(world.indefinite_array_type(world.tuple_type({ world.type_pu32(), ptr_ty, ptr_ty }))), stages_global));
 
