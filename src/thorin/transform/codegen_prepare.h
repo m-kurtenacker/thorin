@@ -1,13 +1,13 @@
 #ifndef THORIN_TRANSFORM_CODEGEN_PREPARE_H
 #define THORIN_TRANSFORM_CODEGEN_PREPARE_H
 
-#include "thorin/thorin.h"
+#include "thorin/world.h"
 
 namespace thorin {
 
 class World;
 
-void codegen_prepare(Thorin&);
+void codegen_prepare(std::unique_ptr<World>&);
 
 }
 

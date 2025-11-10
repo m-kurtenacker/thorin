@@ -1,7 +1,7 @@
 #ifndef THORIN_TRANSFORM_INLINER_H
 #define THORIN_TRANSFORM_INLINER_H
 
-#include "thorin/thorin.h"
+#include "thorin/world.h"
 
 namespace thorin {
 
@@ -13,7 +13,7 @@ class World;
  * If there still remain functions to be inlined, warnings will be emitted
  */
 void force_inline(Scope& scope, int threshold);
-void inliner(Thorin&);
+void inliner(std::unique_ptr<World>&);
 
 }
 

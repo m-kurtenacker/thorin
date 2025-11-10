@@ -43,16 +43,16 @@ struct LowerClosureEnv : public Rewriter {
     }
 };
 
-void lower_closure_env(thorin::Thorin& thorin) {
-    thorin.world().VLOG("start lower_closure_env");
-    auto& src = thorin.world();
+void lower_closure_env(std::unique_ptr<World>& world) {
+    world->VLOG("start lower_closure_env");
+    auto& src = *world;
     auto destination = std::make_unique<World>(src);
     LowerClosureEnv pass(src, *destination.get());
 
     pass.rewrite_externals();
 
-    thorin.world_container().swap(destination);
-    thorin.world().VLOG("end lower_closure_env");
+    std::swap(world, destination);
+    world->VLOG("end lower_closure_env");
 }
 
 }

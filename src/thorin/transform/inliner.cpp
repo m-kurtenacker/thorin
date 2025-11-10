@@ -1,5 +1,6 @@
 #include "inliner.h"
 
+#include "cleanup_world.h"
 #include "thorin/analyses/cfg.h"
 #include "thorin/analyses/scope.h"
 #include "thorin/analyses/verify.h"
@@ -36,9 +37,8 @@ void force_inline(Scope& scope, int threshold) {
     }
 }
 
-void inliner(Thorin& thorin) {
-    World& world = thorin.world();
-    world.VLOG("start inliner");
+void inliner(std::unique_ptr<World>& world) {
+    world->VLOG("start inliner");
 
     static const int factor = 8;
     static const int offset = 8;
@@ -69,7 +69,7 @@ void inliner(Thorin& thorin) {
         return nullptr;
     };
 
-    ScopesForest(world).for_each([&] (Scope& scope) {
+    ScopesForest(*world).for_each([&] (Scope& scope) {
         bool dirty = false;
         for (auto n : scope.f_cfg().post_order()) {
             auto continuation = n->continuation();
@@ -77,9 +77,9 @@ void inliner(Thorin& thorin) {
             if (auto callee = continuation->body()->callee()->isa_nom<Continuation>()) {
                 if (callee == scope.entry())
                     continue; // don't inline recursive calls
-                world.DLOG("callee: {}", callee);
+                world->DLOG("callee: {}", callee);
                 if (auto callee_scope = is_candidate(callee)) {
-                    world.DLOG("- here: {}", continuation);
+                    world->DLOG("- here: {}", continuation);
                     continuation->jump(drop(*callee_scope, continuation->body()->args()), {}, continuation->debug()); // TODO debug
                     dirty = true;
                 }
@@ -94,9 +94,9 @@ void inliner(Thorin& thorin) {
         }
     });
 
-    world.VLOG("stop inliner");
-    debug_verify(world);
-    thorin.cleanup();
+    world->VLOG("stop inliner");
+    debug_verify(*world);
+    cleanup_world(world);
 
 }
 

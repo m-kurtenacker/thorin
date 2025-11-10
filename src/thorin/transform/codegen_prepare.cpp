@@ -46,17 +46,17 @@ struct CodegenPrepare : public Rewriter {
 
 /// this pass makes sure the return param is only called directly, by eta-expanding any uses where it appears in another position
 // TODO: this effectively prevents tail-calls, this shouldn't run if the backend supports tail-calls
-void codegen_prepare(Thorin& thorin) {
-    thorin.world().VLOG("start codegen_prepare");
-    auto& src = thorin.world();
+void codegen_prepare(std::unique_ptr<World>& world) {
+    world->VLOG("start codegen_prepare");
+    auto& src = *world;
     auto destination = std::make_unique<World>(src);
     CodegenPrepare pass(src, *destination.get());
 
     for (auto& external : src.externals())
         pass.instantiate(external.second);
 
-    thorin.world_container().swap(destination);
-    thorin.world().VLOG("end codegen_prepare");
+    std::swap(world, destination);
+    world->VLOG("end codegen_prepare");
 }
 
 }

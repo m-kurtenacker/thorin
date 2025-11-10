@@ -28,31 +28,31 @@ bool Thorin::debug() { return debug_; }
 int Thorin::opt() { return opt_; }
 std::string& Thorin::hls_flags() { return hls_flags_; }
 
+void run_pass(std::unique_ptr<World>& world, std::function<void()> f, std::string pass_name) {
+    world->VLOG("running pass {}", pass_name);
+    f();
+    debug_verify(*world);
+    bool debug_passes = getenv("THORIN_DEBUG_PASSES");
+    if (debug_passes)
+        world->dump_scoped();
+}
+
 /*
 * optimizations
  */
 void Thorin::compile() {
-    bool debug_passes = getenv("THORIN_DEBUG_PASSES");
-#define RUN_PASS(pass) \
-{ \
-world().VLOG("running pass {}", #pass);  \
-pass;                                    \
-debug_verify(world());                   \
-if (debug_passes) world().dump_scoped(); \
-}
-
-    RUN_PASS(cleanup())
-    RUN_PASS(flatten_tuples(*this))
-    RUN_PASS(split_slots(*this))
-    RUN_PASS(lift(*this));
+    RUN_PASS(world_container(), cleanup());
+    RUN_PASS(world_container(), flatten_tuples(world_container()));
+    RUN_PASS(world_container(), split_slots(world_container()));
+    RUN_PASS(world_container(), lift(*this));
     //RUN_PASS(inliner(*this))
-    RUN_PASS(hoist_enters(*this))
-    RUN_PASS(dead_load_opt(world()))
-    RUN_PASS(lower_closure_env(*this));
+    RUN_PASS(world_container(), hoist_enters(world_container()));
+    RUN_PASS(world_container(), dead_load_opt(world()));
+    RUN_PASS(world_container(), lower_closure_env(world_container()));
     //RUN_PASS(cleanup())
-    RUN_PASS(codegen_prepare(*this))
-    offload_->offload(world());
-    fungl_lower(world_container(), false);
+    //RUN_PASS(codegen_prepare(world_container()));
+    RUN_PASS(world_container(), offload_->offload(world()));
+    RUN_PASS(world_container(), fungl_lower(world_container(), false));
 }
 
 void Thorin::cleanup() { cleanup_world(world_container()); }

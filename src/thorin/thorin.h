@@ -40,6 +40,10 @@ private:
     std::unique_ptr<Offload> offload_;
 };
 
+void run_pass(std::unique_ptr<World>& world, std::function<void()> f, std::string pass_name);
+
+#define RUN_PASS(w, pass) run_pass(w, [&]() { pass; }, #pass)
+
 }
 
 #endif

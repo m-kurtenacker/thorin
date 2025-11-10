@@ -1,5 +1,6 @@
 #include "hoist_enters.h"
 
+#include "cleanup_world.h"
 #include "thorin/analyses/cfg.h"
 #include "thorin/analyses/scope.h"
 #include "thorin/analyses/verify.h"
@@ -55,12 +56,12 @@ static bool hoist_enters(const Scope& scope) {
 }
 
 // TODO: rewrite this and put it out of its misery
-void hoist_enters(Thorin& thorin) {
+void hoist_enters(std::unique_ptr<World>& world) {
     bool todo = false;
     do {
         todo = false;
-        ScopesForest forest(thorin.world());
-        for (auto cont : thorin.world().copy_continuations()) {
+        ScopesForest forest(*world);
+        for (auto cont : world->copy_continuations()) {
             if (!cont->has_body())
                 continue;
             auto& scope = forest.get_scope(cont);
@@ -71,7 +72,7 @@ void hoist_enters(Thorin& thorin) {
             }
         }
     } while (todo);
-    thorin.cleanup();
+    cleanup_world(world);
 }
 
 }

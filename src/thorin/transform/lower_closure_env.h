@@ -1,7 +1,7 @@
-#include "thorin/thorin.h"
+#include "thorin/world.h"
 
 namespace thorin {
 
-void lower_closure_env(Thorin&);
+void lower_closure_env(std::unique_ptr<World>&);
 
 }

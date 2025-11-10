@@ -1,7 +1,7 @@
-#include "thorin/thorin.h"
+#include "thorin/world.h"
 
 namespace thorin {
 
-void flatten_tuples(Thorin& thorin);
+void flatten_tuples(std::unique_ptr<World>&);
 
 }

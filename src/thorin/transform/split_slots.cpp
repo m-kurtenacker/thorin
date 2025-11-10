@@ -5,6 +5,8 @@
 #include "thorin/analyses/verify.h"
 #include "thorin/transform/split_slots.h"
 
+#include "cleanup_world.h"
+
 namespace thorin {
 
 struct IndexHash {
@@ -88,12 +90,12 @@ static bool split_slots(const Scope& /* scope */) {
     return todo;
 }
 
-void split_slots(Thorin& thorin) {
+void split_slots(std::unique_ptr<World>& world) {
     bool todo = true;
     while (todo) {
         todo = false;
-        ScopesForest(thorin.world()).for_each([&] (const Scope& scope) { todo |= split_slots(scope); });
-        thorin.cleanup();
+        ScopesForest(*world).for_each([&] (const Scope& scope) { todo |= split_slots(scope); });
+        cleanup_world(world);
     }
 }
 
