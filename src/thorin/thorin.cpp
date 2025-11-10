@@ -48,9 +48,6 @@ void Thorin::compile() {
     //RUN_PASS(inliner(*this))
     RUN_PASS(world_container(), hoist_enters(world_container()));
     RUN_PASS(world_container(), dead_load_opt(world()));
-    RUN_PASS(world_container(), lower_closure_env(world_container()));
-    //RUN_PASS(cleanup())
-    //RUN_PASS(codegen_prepare(world_container()));
     RUN_PASS(world_container(), offload_->offload(world()));
     RUN_PASS(world_container(), fungl_lower(world_container(), false));
 }

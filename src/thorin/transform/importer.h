@@ -31,6 +31,7 @@ private:
 };
 
 std::unique_ptr<World> clone_world(World&);
+void import_world(World& dst, World& src);
 
 }
 

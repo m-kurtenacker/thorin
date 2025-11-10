@@ -15,12 +15,12 @@ public:
 
     /// @name getters
     //@{
-    World& world() const { return world_; }
+    World& world() const { return *world_; }
     bool debug() const { return debug_; }
     //@}
 
-private:
-    World& world_;
+protected:
+    std::unique_ptr<World> world_;
     bool debug_;
 };
 

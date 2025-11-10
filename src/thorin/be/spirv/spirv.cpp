@@ -3,6 +3,8 @@
 #include "thorin/analyses/scope.h"
 #include "thorin/analyses/schedule.h"
 #include "thorin/analyses/domtree.h"
+#include "thorin/thorin.h"
+#include "thorin/transform/lower_closure_env.h"
 
 #include <iostream>
 
@@ -96,8 +98,9 @@ Id FileBuilder::u32_constant(uint32_t pattern) {
 }
 
 CodeGen::CodeGen(World& world, Target& target_info, bool debug, const KernelConfigs* kernel_configs)
-        : thorin::CodeGen(world, debug), target_info_(target_info), kernel_configs_(kernel_configs)
-{}
+        : thorin::CodeGen(world, debug), target_info_(target_info), kernel_configs_(kernel_configs) {
+    RUN_PASS(world_, lower_closure_env(world_));
+}
 
 void CodeGen::emit_stream(std::ostream& out) {
     FileBuilder builder(this);

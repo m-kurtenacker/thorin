@@ -126,16 +126,20 @@ const Def* Importer::find_origin(const Def* ndef) {
     return nullptr;
 }
 
-std::unique_ptr<World> clone_world(World& world) {
-    auto fresh_world = std::make_unique<World>(world);
-    Importer importer(world, *fresh_world);
+void import_world(World& dst, World& src) {
+    Importer importer(src, dst);
 
-    for (auto&& [_, def] : world.externals()) {
+    for (auto&& [_, def] : src.externals()) {
         if (auto cont = def->isa<Continuation>(); cont && cont->is_exported())
             importer.import(cont);
         if (auto global = def->isa<Global>(); global && global->is_external())
             importer.import(global);
     }
+}
+
+std::unique_ptr<World> clone_world(World& world) {
+    auto fresh_world = std::make_unique<World>(world);
+    import_world(*fresh_world, world);
     return fresh_world;
 }
 

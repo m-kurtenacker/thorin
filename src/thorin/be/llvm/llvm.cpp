@@ -36,6 +36,8 @@
 #include "thorin/primop.h"
 #include "thorin/type.h"
 #include "thorin/world.h"
+#include "thorin/thorin.h"
+#include "thorin/transform/lower_closure_env.h"
 #include "thorin/analyses/scope.h"
 #include "thorin/util/array.h"
 
@@ -61,6 +63,10 @@ CodeGen::CodeGen(
     , function_calling_convention_(function_calling_convention)
     , device_calling_convention_(device_calling_convention)
     , kernel_calling_convention_(kernel_calling_convention) {
+
+    RUN_PASS(world_, lower_closure_env(world_));
+    //RUN_PASS(codegen_prepare(world_container()));
+
     static const char* runtime_definitions = R"(
         ; Module anydsl runtime decls
         declare noalias ptr @anydsl_alloc(i32, i64);
