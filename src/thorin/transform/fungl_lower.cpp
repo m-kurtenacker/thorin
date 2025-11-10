@@ -28,7 +28,7 @@ struct FunGLLower : Rewriter {
         std::vector<const Def*> ops;
         ops.push_back(dst().literal_pu32(SpvOpTypeImage, { "opcode" }));
         ops.push_back(dst().tuple({
-            dst().tuple({}),
+            dst().top(dst().unit_type()),
             dst().literal_pu32(spv::Dim2D, { "dim" }),
             dst().literal_pu32(0, { "depth"}),
             dst().literal_pu32(0, { "arrayed"}),
@@ -47,7 +47,7 @@ struct FunGLLower : Rewriter {
         std::vector<const Def*> ops;
         ops.push_back(dst().literal_pu32(SpvOpTypeSampledImage, { "opcode" }));
         ops.push_back(dst().tuple({
-            dst().tuple({}),
+            dst().top(dst().unit_type()),
         }));
         ops.push_back(image);
         auto nty = dst().extern_type("spirv.type", ops.size(), {});
