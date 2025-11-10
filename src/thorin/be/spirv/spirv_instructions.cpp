@@ -94,9 +94,9 @@ std::tuple<spv::Scope, spv::MemorySemanticsMask> addrspace_atomics_params(World&
     }
 }
 
-std::vector<Id> CodeGen::emit_intrinsic(const App& app, const Continuation* intrinsic, BasicBlockBuilder* bb) {
+std::vector<Id> CodeGen::emit_device_function_call(const App& app, const Continuation* device_fn, BasicBlockBuilder* bb) {
     auto get_produced_types = [&]() {
-        auto fn_type = intrinsic->type();
+        auto fn_type = device_fn->type();
         return *(fn_type->codomain());
     };
 
@@ -105,14 +105,14 @@ std::vector<Id> CodeGen::emit_intrinsic(const App& app, const Continuation* intr
     };
 
     SpirMathOps* impl = target_info_.dialect == Target::Vulkan ? &glsl_std : &opencl_std;
-    auto intrinsic_name = intrinsic->name();
+    auto intrinsic_name = device_fn->name();
 #define THORIN_MATHOP(mathop_name) \
     if ((#mathop_name) == intrinsic_name) { \
         return { bb->ext_instruction(convert(get_produced_type()).id, *impl->mathop_name, emit_args(app.args().skip_back())) }; \
     }
 #include "thorin/tables/mathoptable.h"
 
-    if (intrinsic->name() == "spirv.nonsemantic.printf") {
+    if (device_fn->name() == "spirv.nonsemantic.printf") {
         std::vector<Id> args;
         auto string = app.arg(1);
         if (auto arr_type = string->type()->isa<DefiniteArrayType>(); arr_type->elem_type() == world().type_pu8()) {
@@ -131,14 +131,14 @@ std::vector<Id> CodeGen::emit_intrinsic(const App& app, const Continuation* intr
         builder_->extension("SPV_KHR_non_semantic_info");
         bb->ext_instruction(convert(world().unit_type()).id, { "NonSemantic.DebugPrintf", 1}, args);
         return {};
-    } else if (intrinsic->name() == "spirv.global") {
+    } else if (device_fn->name() == "spirv.global") {
         std::vector<Id> productions;
         auto desired_type = get_produced_type()->as<PtrType>();
         auto id = builder_->global_variable(convert(desired_type).id, static_cast<spv::StorageClass>(convert(desired_type->addr_space())));
         builder_->interface.push_back(id);
         productions.push_back(id);
         return productions;
-    } else if (intrinsic->name() == "spirv.decorate") {
+    } else if (device_fn->name() == "spirv.decorate") {
         std::vector<Id> productions;
         if (auto decoration_lit = app.arg(2)->isa<PrimLit>()) {
             auto decoration = decoration_lit->value().get_u32();
@@ -149,7 +149,7 @@ std::vector<Id> CodeGen::emit_intrinsic(const App& app, const Continuation* intr
             }
         }
         world().ELOG("spirv.decorate requires an integer literal as the argument");
-    } else if (intrinsic->name() == "spirv.builtin") {
+    } else if (device_fn->name() == "spirv.builtin") {
         std::vector<Id> productions;
         if (auto spv_builtin_lit = app.arg(1)->isa<PrimLit>()) {
             auto spv_builtin = spv_builtin_lit->value().get_u32();
@@ -167,7 +167,7 @@ std::vector<Id> CodeGen::emit_intrinsic(const App& app, const Continuation* intr
             return productions;
         } else
             world().ELOG("spirv.builtin requires an integer literal as the argument");
-    } else if (intrinsic->name() == "reserve_shared") {
+    } else if (device_fn->name() == "reserve_shared") {
         auto produced_t = get_produced_type()->as<PtrType>();
         auto pointee = produced_t->pointee();
         if (auto indef = pointee->isa<IndefiniteArrayType>())
@@ -182,7 +182,7 @@ std::vector<Id> CodeGen::emit_intrinsic(const App& app, const Continuation* intr
             id = bb->convert(spv::Op::OpBitcast, convert(produced_t).id, id);
             return { id };
         }
-    } else if (intrinsic->name() == "min") {
+    } else if (device_fn->name() == "min") {
         auto type = get_produced_type();
         if (is_type_f(type))
             return { bb->ext_instruction(convert(get_produced_type()).id, { .set_name = "OpenCL.std", .id = OpenCLLIB::Fmin }, emit_args(app.args().skip_back())) };
@@ -190,7 +190,7 @@ std::vector<Id> CodeGen::emit_intrinsic(const App& app, const Continuation* intr
             return { bb->ext_instruction(convert(get_produced_type()).id, { .set_name = "OpenCL.std", .id = OpenCLLIB::UMin }, emit_args(app.args().skip_back())) };
         if (is_type_i(type))
             return { bb->ext_instruction(convert(get_produced_type()).id, { .set_name = "OpenCL.std", .id = OpenCLLIB::SMin }, emit_args(app.args().skip_back())) };
-    } else if (intrinsic->name() == "max") {
+    } else if (device_fn->name() == "max") {
         auto type = get_produced_type();
         if (is_type_f(type))
             return { bb->ext_instruction(convert(get_produced_type()).id, { .set_name = "OpenCL.std", .id = OpenCLLIB::Fmax }, emit_args(app.args().skip_back())) };
@@ -198,11 +198,11 @@ std::vector<Id> CodeGen::emit_intrinsic(const App& app, const Continuation* intr
             return { bb->ext_instruction(convert(get_produced_type()).id, { .set_name = "OpenCL.std", .id = OpenCLLIB::UMax }, emit_args(app.args().skip_back())) };
         if (is_type_i(type))
             return { bb->ext_instruction(convert(get_produced_type()).id, { .set_name = "OpenCL.std", .id = OpenCLLIB::SMax }, emit_args(app.args().skip_back())) };
-    } else if (intrinsic->name() == "barrier") {
+    } else if (device_fn->name() == "barrier") {
         emit_args(app.args().skip_back());
         bb->op(spv::Op::OpControlBarrier, { literal(spv::Scope::ScopeWorkgroup), literal(spv::Scope::ScopeWorkgroup), literal(spv::MemorySemanticsMask::MemorySemanticsWorkgroupMemoryMask | spv::MemorySemanticsMask::MemorySemanticsSequentiallyConsistentMask) });
         return { };
-    } else if (intrinsic->name() == "atomic_add") {
+    } else if (device_fn->name() == "atomic_add") {
         auto args = emit_args(app.args().skip_back());
         auto [ptr, value] = *(std::array<Id, 2>*)args.data();
         auto produced = get_produced_type();
@@ -223,7 +223,7 @@ std::vector<Id> CodeGen::emit_intrinsic(const App& app, const Continuation* intr
         auto [scope, semantics] = addrspace_atomics_params(world(), app.arg(1)->type()->as<PtrType>()->addr_space());
         auto result = bb->op_with_result(op, convert(get_produced_type()).id,  { ptr, literal(scope), literal(semantics), value });
         return { result };
-    } else if (intrinsic->name() == "atomic_min") {
+    } else if (device_fn->name() == "atomic_min") {
         auto args = emit_args(app.args().skip_back());
         auto [ptr, value] = *(std::array<Id, 2>*)args.data();
         auto produced = get_produced_type();
@@ -246,17 +246,17 @@ std::vector<Id> CodeGen::emit_intrinsic(const App& app, const Continuation* intr
         auto [scope, semantics] = addrspace_atomics_params(world(), app.arg(1)->type()->as<PtrType>()->addr_space());
         auto result = bb->op_with_result(op, convert(get_produced_type()).id,  { ptr, literal(scope), literal(semantics), value });
         return { result };
-    } else if (intrinsic->name() == "rv_all") {
+    } else if (device_fn->name() == "rv_all") {
         auto args = emit_args(app.args().skip_back());
         auto result = bb->op_with_result(spv::Op::OpGroupAll, convert(get_produced_type()).id,  { literal(spv::Scope::ScopeInvocation), emit(app.arg(1)) });
         return { result };
-    } else if (intrinsic->name() == "spirv.printf") {
+    } else if (device_fn->name() == "spirv.printf") {
         Array<const Def*> args = app.args().skip_back();
         while (auto bitcast = args[1]->isa<Bitcast>())
             args[1] = bitcast->from();
         return { bb->ext_instruction(convert(get_produced_type()).id, { .set_name = "OpenCL.std", .id = OpenCLLIB::Printf }, emit_args(args)) };
     }
-    world().ELOG("thorin/spirv: Intrinsic '{}' isn't recognised", intrinsic->name());
+    world().ELOG("thorin/spirv: Device function '{}' isn't recognised", device_fn->name());
     exit(-1);
 }
 

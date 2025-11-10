@@ -74,7 +74,7 @@ public:
     Id emit_bb(BasicBlockBuilder* bb, const Def* def);
 protected:
     FnBuilder& get_fn_builder(Continuation*);
-    std::vector<Id> emit_intrinsic(const App& app, const Continuation* intrinsic, BasicBlockBuilder* bb);
+    std::vector<Id> emit_device_function_call(const App& app, const Continuation* device_fn, BasicBlockBuilder* bb);
     std::vector<Id> emit_args(Defs);
     bool should_emit(const Type*);
     Id literal(uint32_t);

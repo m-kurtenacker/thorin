@@ -460,12 +460,12 @@ void CodeGen::emit_epilogue(Continuation* continuation) {
         }
     } else if (app.callee()->isa<Bottom>()) {
         bb->terminator.unreachable();
-    } else if (auto intrinsic = app.callee()->isa_nom<Continuation>(); intrinsic && (intrinsic->is_intrinsic() || intrinsic->cc() == CC::Device)) {
+    } else if (auto device_fn = app.callee()->isa_nom<Continuation>(); device_fn && (device_fn->cc() == CC::Device)) {
         // Ensure we emit previous memory operations
         assert(is_mem(app.arg(0)));
         emit_unsafe(app.arg(0));
 
-        auto productions = emit_intrinsic(app, intrinsic, bb);
+        auto productions = emit_device_function_call(app, device_fn, bb);
         emit_jump(bb, app.ret_arg(), productions);
     } else if (auto codom = app.callee_type()->codomain()) { // function/closure call
         auto args = emit_args();
