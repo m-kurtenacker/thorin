@@ -374,8 +374,11 @@ void emit_sync(RuntimeAPI& api, Continuation* continuation) {
 
 auto build_setup_args_fn(World& world, const Def*& mem, ArrayRef<const Def*> args) {
     auto ptr_ty = world.ptr_type(world.indefinite_array_type(world.type_pu8()));
-    auto callback_fn_t = world.closure_type({world.mem_type(), world.type_pu64(), world.type_qs32(), world.ptr_type(
-            world.indefinite_array_type(ptr_ty)), world.return_type({world.mem_type()})});
+    auto callback_fn_t = world.closure_type({world.mem_type(),
+        world.type_pu64(), world.type_qs32(),
+        world.ptr_type(world.indefinite_array_type(ptr_ty)),
+        world.ptr_type(world.indefinite_array_type(world.type_pu64())),
+        world.return_type({world.mem_type()})});
     Continuation* setup_args_fn = world.continuation(
             world.fn_type({world.mem_type(), world.type_pu64(), callback_fn_t, world.return_type({world.mem_type()})}));
     //const Def* mem = setup_args_fn->mem_param();
@@ -387,15 +390,20 @@ auto build_setup_args_fn(World& world, const Def*& mem, ArrayRef<const Def*> arg
         return world.extract(r, static_cast<uint32_t>(1));
     };
     auto pointers = alloc(world.definite_array_type(ptr_ty, args.size()));
+    std::vector<const Def*> sizes;
     for (size_t i = 0; i < args.size(); i++) {
         auto arg_on_stack = alloc(args[i]->type());
         mem = world.store(mem, arg_on_stack, args[i]);
         mem = world.store(mem, world.lea(pointers, world.literal_pu32(i, {}), {}), world.bitcast(ptr_ty, arg_on_stack));
+        sizes.push_back(world.size_of(args[i]->type()));
     }
+    auto sizes_global = world.global(world.definite_array(world.type_qs64(), sizes), false, {"sizes"});
     auto dummy_closure = world.closure(world.closure_type(setup_args_fn->type()->types()));
     auto self_param = setup_args_fn->append_param(dummy_closure->type());
     auto env = world.closure_env(pointers->type(), setup_args_fn->mem_param(), self_param);
-    setup_args_fn->set_body(world.app(callback, { world.extract(env, 0u), pipeline_handle, world.literal_qs32(args.size(), {}), world.bitcast(callback_fn_t->types()[3], world.extract(env, 1)), setup_args_fn->ret_param() }));
+    auto restored_pointers = world.bitcast(callback_fn_t->types()[3], world.extract(env, 1));
+    auto sizes_cast = world.bitcast(callback_fn_t->types()[4], sizes_global);
+    setup_args_fn->set_body(world.app(callback, { world.extract(env, 0u), pipeline_handle, world.literal_qs32(args.size(), {}), restored_pointers, sizes_cast, setup_args_fn->ret_param() }));
     // setup function has to be a closure
     dummy_closure->set_fn(setup_args_fn, self_param->index());
     dummy_closure->set_env(pointers);

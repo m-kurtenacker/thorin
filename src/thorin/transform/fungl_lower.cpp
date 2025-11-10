@@ -64,7 +64,7 @@ struct FunGLLower : Rewriter {
                     return make_sampled_image_type(it);
                 } else {
                     auto struct_t = dst().struct_type("Image2D", 0);
-                    return struct_t;
+                    return dst().ptr_type(struct_t);
                 }
             }
         }
