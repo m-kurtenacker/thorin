@@ -310,6 +310,17 @@ ConvertedType CodeGen::convert(const Type* type) {
                 std::vector<uint32_t> o;
                 size_t src_op = 2;
                 for (auto p : pattern) {
+                    if (p->isa<Top>()) {
+                        if (src_op >= extern_type->num_ops()) {
+                            world().edef(extern_type, "Not enough operands, pattern item requires {} operand but only {} are available", src_op, extern_type->num_ops());
+                        }
+                        auto def = extern_type->op(src_op++);
+                        if (auto t = def->isa<Type>())
+                            o.push_back(convert(t).id);
+                        else
+                            o.push_back(emit_constant(def));
+                        continue;
+                    }
                     if (auto lit = p->isa<Literal>()) {
                         o.push_back(thorin::primlit_value<uint32_t>(lit));
                         continue;
@@ -317,14 +328,6 @@ ConvertedType CodeGen::convert(const Type* type) {
                     if (auto str = p->isa<DefiniteArray>()) {
                         auto lits = builder::make_literal_string(str->as_string());
                         o.insert(o.begin(), lits.begin(), lits.end());
-                        continue;
-                    }
-                    if (is_unit(p)) {
-                        if (src_op >= extern_type->num_ops()) {
-                            world().edef(extern_type, "Not enough operands, pattern item requires {} operand but only {} are available", src_op, extern_type->num_ops());
-                        }
-                        auto def = extern_type->op(src_op++);
-                        o.push_back(emit_constant(def));
                         continue;
                     }
                     world().edef(extern_type, "Invalid pattern item");
