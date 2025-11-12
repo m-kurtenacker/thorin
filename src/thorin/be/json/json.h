@@ -27,9 +27,6 @@ public:
     void emit_json(json& j);
     void emit_stream(std::ostream& stream) override;
 
-    const char* file_ext() const override {
-        return ".thorin.json";
-    }
 private:
     std::string& target_triple;
     std::string& target_cpu;
