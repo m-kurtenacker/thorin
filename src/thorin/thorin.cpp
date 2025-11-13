@@ -14,6 +14,8 @@
 #include "thorin/transform/split_slots.h"
 #include "thorin/transform/fungl_lower.h"
 
+#include "thorin/offload/lift_offloaded_kernels.h"
+
 namespace thorin {
 
 Thorin::Thorin(const std::string& name, int opt, bool debug, std::string& hls_flags)
@@ -44,6 +46,7 @@ void Thorin::compile() {
     RUN_PASS(world_container(), cleanup());
     RUN_PASS(world_container(), flatten_tuples(world_container()));
     RUN_PASS(world_container(), split_slots(world_container()));
+    RUN_PASS(world_container(), lower_offloaded_kernels(world_container(), offload()));
     RUN_PASS(world_container(), lift(*this));
     //RUN_PASS(inliner(*this))
     RUN_PASS(world_container(), hoist_enters(world_container()));

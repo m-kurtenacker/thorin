@@ -9,6 +9,57 @@
 
 namespace thorin {
 
+DefSet spillable_free_defs(Continuation* entry, ScopesForest& forest, DefSet& result, DefSet& rematerialize) {
+    unique_queue<DefSet> queue;
+
+    auto& scope = forest.get_scope(entry);
+
+    for (auto def: scope.free_frontier())
+        queue.push(def);
+    //entry->world().DLOG("Computing free variables for {}", entry);
+
+    while (!queue.empty()) {
+        auto free = queue.pop();
+        assert(!free->type()->isa<MemType>());
+
+        if (free == entry)
+            continue;
+
+        if (auto tuple = free->isa<Tuple>()) {
+            // always rematerialize tuples
+            rematerialize.insert(tuple);
+            for (auto elem : tuple->ops())
+                queue.push(elem);
+        } else if (auto cont = free->isa_nom<Continuation>()) {
+            // only capture basic blocks - not top level fns
+            // note: capturing basic blocks is bad
+            if (!scope.contains(cont)) {
+                auto& other_scope = forest.get_scope(cont);
+                // top-level continuations don't have parent scopes
+                bool top_level = other_scope.parent_scope() == nullptr;
+                if (!top_level) {
+                    //entry->world().DLOG("fv (cont) of {}: {} : {}", entry, cont, cont->type());
+                    result.insert(free);
+                    //lookup(cont).convert = true;
+                } else {
+                    //entry->world().DLOG("ignoring {} because it is top level", free);
+                }
+            } else {
+                //entry->world().DLOG("ignoring {} because it's in scope of the lifted cont", free);
+            }
+        } else if (free->has_dep(Dep::Param) || free->has_dep(Dep::Cont)) {
+            //entry->world().DLOG("fv of {}: {} : {}", entry, free, free->type());
+            result.insert(free);
+        } else {
+            //free->world().DLOG("ignoring {} because it has no Param dependency", free);
+        }
+    }
+
+    //entry->world().DLOG("Computed free variables for {, }", result);
+
+    return result;
+}
+
 bool is_closure_convertible(Continuation* cont) {
     if (cont->is_external() || cont->is_intrinsic())
         return false;
@@ -34,7 +85,7 @@ struct ClosureConverter {
             if (!convert_to_closure) {
                 convert_to_closure = true;
                 DefSet free_vars_set;
-                converter.spillable_free_defs(scope.entry(), free_vars_set, rematerialize);
+                spillable_free_defs(scope.entry(), converter.forest_, free_vars_set, rematerialize);
                 for (auto fv : free_vars_set) {
                     free_vars.push_back(fv);
                     if (auto spill_this = fv->isa_nom<Continuation>()) {
@@ -129,57 +180,6 @@ struct ClosureConverter {
         }
     }
 
-    DefSet spillable_free_defs(Continuation* entry, DefSet& result, DefSet& rematerialize) {
-        unique_queue<DefSet> queue;
-
-        auto& scope = forest_.get_scope(entry);
-
-        for (auto def: scope.free_frontier())
-            queue.push(def);
-        //entry->world().DLOG("Computing free variables for {}", entry);
-
-        while (!queue.empty()) {
-            auto free = queue.pop();
-            assert(!free->type()->isa<MemType>());
-
-            if (free == entry)
-                continue;
-
-            if (auto tuple = free->isa<Tuple>()) {
-                // always rematerialize tuples
-                rematerialize.insert(tuple);
-                for (auto elem : tuple->ops())
-                    queue.push(elem);
-            } else if (auto cont = free->isa_nom<Continuation>()) {
-                // only capture basic blocks - not top level fns
-                // note: capturing basic blocks is bad
-                if (!scope.contains(cont)) {
-                    auto& other_scope = forest_.get_scope(cont);
-                    // top-level continuations don't have parent scopes
-                    bool top_level = other_scope.parent_scope() == nullptr;
-                    if (!top_level) {
-                        //entry->world().DLOG("fv (cont) of {}: {} : {}", entry, cont, cont->type());
-                        result.insert(free);
-                        //lookup(cont).convert = true;
-                    } else {
-                        //entry->world().DLOG("ignoring {} because it is top level", free);
-                    }
-                } else {
-                    //entry->world().DLOG("ignoring {} because it's in scope of the lifted cont", free);
-                }
-            } else if (free->has_dep(Dep::Param) || free->has_dep(Dep::Cont)) {
-                //entry->world().DLOG("fv of {}: {} : {}", entry, free, free->type());
-                result.insert(free);
-            } else {
-                //free->world().DLOG("ignoring {} because it has no Param dependency", free);
-            }
-        }
-
-        //entry->world().DLOG("Computed free variables for {, }", result);
-
-        return result;
-    }
-
     struct ScopeRewriter : public Rewriter {
         ScopeRewriter(ClosureConverter& converter, Scope* scope, ScopeRewriter* parent) : Rewriter(converter.src(), converter.dst()), converter_(converter), parent_(parent), scope_(scope), name_(scope ? scope->entry()->unique_name() : "root") {
             if (parent)
@@ -241,7 +241,6 @@ struct ClosureConverter {
     std::vector<const Type*> rewrite_param_types(ScopeRewriter& rewriter, Continuation* ocont) {
         std::vector<const Type*> nparam_types;
 
-        bool is_accelerator = ocont->is_accelerator();
         for (auto pt : ocont->type()->types()) {
             const Type* npt = rewriter.instantiate(pt)->as<Type>();
             // in intrinsics, don't closure-convert parameters
@@ -463,10 +462,10 @@ const Def* ClosureConverter::ScopeRewriter::rewrite(const Def* const odef) {
         for (size_t i = 0; i < app->num_args(); i++) {
             auto oarg = app->arg(i);
             // do not convert accelerator kernels
-            if (ncont && ncont->is_accelerator()) {
-                if (oarg->type()->isa<FnType>() && !oarg->type()->isa<ReturnType>())
-                    continue;
-            }
+            // if (ncont && ncont->is_accelerator()) {
+            //     if (oarg->type()->isa<FnType>() && !oarg->type()->isa<ReturnType>())
+            //         continue;
+            // }
             nargs[i] = instantiate(oarg);
 
             if (auto ocont = oarg->isa_nom<Continuation>()) {
@@ -498,104 +497,11 @@ const Def* ClosureConverter::ScopeRewriter::rewrite(const Def* const odef) {
         }
 
         if (ncont) {
-            if (ncont->is_accelerator()) {
-                struct S : OffloadSite {
-                    const Def*& host_mem_;
-                    std::vector<const Def*> lifted_args;
-                    std::vector<const Type*> env_types;
-
-                    void add_host_arg(const Def* def) override {
-                        lifted_args.push_back(def);
-                        env_types.push_back(def->type());
-                    }
-
-                    const Def*& host_mem() {
-                        return host_mem_;
-                    }
-
-                    S(Rewriter* r, const Def*& mem) : OffloadSite(r), host_mem_(mem) {}
-                };
-                assert(is_mem(nargs[0]));
-                S site = S(this, nargs[0]);
-
-                auto backend = converter_.thorin_.offload().find_backend_for_intrinsic(ncont->intrinsic());
-
-                struct K : OffloadSite::Kernel {
-                    size_t idx;
-                    ScopeRewriter* body_rewriter;
-                    Array<const Def*> args;
-                    const Def*& mem_;
-
-                    const Def*& find_mem() {
-                        for (size_t i = 0; i < args.size(); i++) {
-                            if (is_mem(args[i]))
-                                return args[i];
-                        }
-                        throw std::runtime_error("no mem");
-                    }
-
-                    const Def*& mem() {
-                        return mem_;
-                    }
-
-                    K(Continuation* old, Continuation* w, size_t i, ScopeRewriter* r) : args(w->params_as_defs()), mem_(find_mem()), Kernel(old, w), idx(i), body_rewriter(r) {}
-
-                    void insert_mapping(const Def* old, const Def* def) override {
-                        body_rewriter->insert(old, def);
-                    }
-
-                    const Def* get_mapping(const Def* old) override {
-                        return body_rewriter->instantiate(old);
-                    }
-                };
-
-                // find the kernels and make a K object for each
-                for (size_t i = 0; i < ncont->num_params(); i++) {
-                    if (!nargs[i]) {
-                        auto old_kernel = app->arg(i)->as_nom<Continuation>();
-                        auto& scope = converter_.forest_.get_scope(old_kernel);
-                        children_.emplace_back(std::make_unique<ScopeRewriter>(converter_, &scope, this));
-
-                        Continuation* wrapper = dst().continuation(dst().fn_type(instantiate(old_kernel->type())->as<FnType>()->types()));
-                        site.kernels_.emplace_back(std::make_unique<K>(old_kernel, wrapper, i, children_.back().get()));
-                    }
-                }
-
-                // iterate over the kernels and register params for them
-                for (auto& k : site.kernels_) {
-                    for (auto ofv : converter_.lookup(k->old_kernel).free_vars) {
-                        if (backend)
-                            backend->lower_env_param(ofv, site);
-                        else
-                            default_lower_env_param(ofv, site);
-                    }
-                }
-
-                // we add them once to the call
-                // we're going to change the type of the accelerator ofc
-                std::vector<const Type*> nintrinsic_types;
-                for (auto t : ncont->type()->copy_types())
-                    nintrinsic_types.push_back(t);
-                for (auto env : site.lifted_args) {
-                    nintrinsic_types.push_back(env->type());
-                    nargs.push_back(env);
-                }
-
-                for (auto& kernel : site.kernels_) {
-                    auto& k = *reinterpret_cast<K*>(&*kernel);
-                    k.wrapper->jump(k.body_rewriter->rewrite(k.old_kernel), k.args);
-
-                    nargs[k.idx] = k.wrapper;
-                    nintrinsic_types[k.idx] = k.wrapper->type();
-                }
-
-                auto nintrinsic = dst().continuation(dst().fn_type(nintrinsic_types), ncont->attributes(),ncont->debug());
-                ncallee = nintrinsic;
-            } else if (ncont->is_intrinsic()) {
+            if (ncont->is_intrinsic()) {
                 for (size_t i = 0; i < app->num_args(); i++) {
                     // ensure the BB arguments to intrinsics such as branch and match are left as continuations
                     auto pt = ncont->type()->types()[i];
-                    if (pt->tag() == Node_FnType)
+                    if (pt->tag() == Node_FnType && nargs[i]->type()->tag() != Node_FnType)
                         nargs[i] = converter_.wrap_in_cont(nargs[i]);
                     else if (auto tuple_t = pt->isa<TupleType>(); tuple_t && tuple_t->types()[1]->tag() == Node_FnType) {
                         nargs[i] = dst().tuple({dst().extract(nargs[i], (u32) 0), converter_.wrap_in_cont(dst().extract(nargs[i], (u32) 1)) });

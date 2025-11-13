@@ -39,6 +39,8 @@ set(THORIN_SOURCES
     offload/offload.cpp
     offload/offload.h
     offload/offload_c.cpp
+    offload/lift_offloaded_kernels.cpp
+    offload/lift_offloaded_kernels.h
     offload/lower_offload_intrinsics.cpp
     offload/lower_offload_intrinsics.h
     offload/runtime.h

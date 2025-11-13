@@ -42,7 +42,7 @@ private:
 /// Represents a callsite where an offload intrinsic is called, used when lifting kernel free variables
 struct OffloadSite {
     Rewriter* rewriter;
-    const Def*& host_mem();
+    virtual const Def*& host_mem() = 0;
     OffloadSite(Rewriter* rewriter) : rewriter(rewriter) {}
 
     virtual void add_host_arg(const Def*) = 0;
@@ -52,7 +52,7 @@ struct OffloadSite {
     struct Kernel {
         Continuation* old_kernel;
         Continuation* wrapper;
-        const Def*& mem();
+        virtual const Def*& mem() = 0;
 
         virtual void insert_mapping(const Def*, const Def*) = 0;
         virtual const Def* get_mapping(const Def*) = 0;
