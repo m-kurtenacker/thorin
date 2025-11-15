@@ -144,8 +144,8 @@ void CodeGen::emit_stream(std::ostream& out) {
     emit_scopes(forest);
 
     int entry_points_count = 0;
-    for (auto& cont : world().copy_continuations()) {
-        if (cont->is_exported() && kernel_configs_) {
+    for (auto& [_, cont] : world().externals()) {
+        if (kernel_configs_) {
             auto found = kernel_configs_->find(cont->name());
             if (found == kernel_configs_->end())
                 continue;
@@ -327,14 +327,14 @@ void CodeGen::finalize(thorin::Continuation* cont) {
 void CodeGen::finalize(const thorin::Scope& scope) {
     builder_->define_function(*builder_->current_fn_, scope.entry()->has_body());
     assert(!(scope.entry()->is_intrinsic() || scope.entry()->cc() == CC::Device));
-    if (scope.entry()->is_external()) {
+    //if (world().is_exported(scope.entry())) {
         if (!scope.entry()->has_body()) {
             auto v = builder::make_literal_string(scope.entry()->name());
             v.push_back(spv::LinkageType::LinkageTypeImport);
             builder_->decorate(builder_->current_fn_->function_id, spv::Decoration::DecorationLinkageAttributes, v);
             builder_->capability(spv::CapabilityLinkage);
         }
-    }
+    //}
 
     for (auto def : scope_local_defs_) {
         defs_.erase(def);

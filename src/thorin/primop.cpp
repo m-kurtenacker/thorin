@@ -99,10 +99,12 @@ Slot::Slot(World& world, const Type* type, const Def* frame, Debug dbg)
     assert(frame->type()->isa<FrameType>());
 }
 
-Global::Global(World& world, const Def* init, bool is_mutable, Debug dbg)
+Global::Global(World& world, const Def* init, bool is_mutable, bool is_imported, Debug dbg)
     : Def(world, Node_Global, world.ptr_type(init->type()), {init}, dbg)
     , is_mutable_(is_mutable)
+    , is_imported_(is_imported)
 {
+    assert(!(init && is_imported) && "globals can't have init values if they are imported");
     assert(!init->has_dep(Dep::Param));
 }
 
@@ -220,7 +222,7 @@ const Def* MathOp        ::rebuild(World& w, const Type*  , Defs o) const { retu
 const Def* Enter         ::rebuild(World& w, const Type*  , Defs o) const { return w.enter(o[0], debug()); }
 const Def* Extract       ::rebuild(World& w, const Type*  , Defs o) const { return w.extract(o[0], o[1], debug()); }
 const Def* Filter        ::rebuild(World& w, const Type*,   Defs o) const { return w.filter(o, debug()); }
-const Def* Global        ::rebuild(World& w, const Type*  , Defs o) const { return w.global(o[0], is_mutable(), debug()); }
+const Def* Global        ::rebuild(World& w, const Type*  , Defs o) const { return w.global(o[0], is_mutable(), is_imported(), debug()); }
 const Def* Hlt           ::rebuild(World& w, const Type*  , Defs o) const { return w.hlt(o[0], debug()); }
 const Def* Known         ::rebuild(World& w, const Type*  , Defs o) const { return w.known(o[0], debug()); }
 const Def* Run           ::rebuild(World& w, const Type*  , Defs o) const { return w.run(o[0], debug()); }
@@ -303,7 +305,7 @@ const char* Global::op_name() const { return is_mutable() ? "global_mutable" : "
  * misc
  */
 
-bool Global::is_external() const { return world().is_external(this); }
+bool Global::is_externally_visible() const { return world().is_exported(this) || is_imported_; }
 
 std::string DefiniteArray::as_string() const {
     std::string res;

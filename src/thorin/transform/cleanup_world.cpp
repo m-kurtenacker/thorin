@@ -122,7 +122,7 @@ void Cleaner::eliminate_params() {
         std::vector<size_t> proxy_idx;
         std::vector<size_t> param_idx;
 
-        if (ocontinuation->has_body() && !world().is_external(ocontinuation)) {
+        if (ocontinuation->has_body() && !ocontinuation->is_signature_fixed()) {
             auto obody = ocontinuation->body();
             for (auto use : ocontinuation->uses()) {
                 if (use->isa<Param>()) continue;
@@ -179,10 +179,7 @@ void Cleaner::rebuild() {
     Importer importer(world(), *fresh_world);
 
     for (auto&& [_, def] : world().externals()) {
-        if (auto cont = def->isa<Continuation>(); cont && cont->is_exported())
-            importer.import(cont);
-        if (auto global = def->isa<Global>(); global && global->is_external())
-            importer.import(global);
+        importer.import(def);
     }
 
     std::swap(world_, fresh_world);

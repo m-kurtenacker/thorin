@@ -76,10 +76,7 @@ void fungl_lower(std::unique_ptr<World>& world, bool is_device) {
     auto fresh_world = std::make_unique<World>(*world);
     FunGLLower importer(*world, *fresh_world, is_device);
     for (auto&& [_, def] : world->externals()) {
-        if (auto cont = def->isa<Continuation>(); cont && cont->is_exported())
-            importer.instantiate(cont);
-        if (auto global = def->isa<Global>(); global && global->is_external())
-            importer.instantiate(global);
+        importer.instantiate(def);
     }
     std::swap(world, fresh_world);
 }

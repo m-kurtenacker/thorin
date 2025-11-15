@@ -199,16 +199,8 @@ public:
     bool is_returning() const;
     bool is_intrinsic() const { return attributes().intrinsic != Intrinsic::None; }
 
-    /// @name visibility
-    ///@{
-    /// |               | `!is_external()` | `is_external()`               |
-    /// |---------------|------------------|-------------------------------|
-    /// | `has_body()`  | regular function | that function `is_exported()` |
-    /// | `!has_body()` | intrinsic        | that function `is_imported()` |
-    bool is_external() const;
-    bool is_imported() const { return is_external() && !has_body(); }
-    bool is_exported() const { return is_external() && has_body(); }
-    ///@}
+    bool is_imported() const;
+    bool is_signature_fixed() const;
 
     // TODO: probably should be moved to Attributes
     bool is_channel() const { return name().find("channel") != std::string::npos; }

@@ -91,6 +91,24 @@ public:
     void emit_c_int();
     void emit_epilogue(Continuation*);
 
+    bool is_exported(Continuation* cont) {
+        if (cont->cc() != CC::C)
+            return false;
+        return world().is_exported(cont);
+    }
+
+    bool is_imported(Continuation* cont) {
+        if (cont->cc() != CC::C)
+            return false;
+        return !cont->has_body();
+    }
+
+    std::string get_symbol_name(Continuation* cont) {
+        if (is_exported(cont) || is_imported(cont))
+            return cont->name();
+        return cont->unique_name();
+    }
+
     std::string emit_bb(BB&, const Def*);
     std::string emit_constant(const Def*);
     std::string emit_bottom(const Type*);
@@ -704,7 +722,7 @@ std::string CCodeGen::prepare(const Scope& scope) {
 
     for (auto param : cont->params()) {
         defs_[param] = param->unique_name();
-        if (lang_ == Lang::HLS && cont->is_exported() && param->type()->isa<PtrType>()) {
+        if (lang_ == Lang::HLS && is_exported(cont) && param->type()->isa<PtrType>()) {
             auto elem_type = pointee_or_elem_type(param->type()->as<PtrType>());
             if ((elem_type->isa<StructType>() || elem_type->isa<DefiniteArrayType>()) && !hls_top_scope)
                 hls_pragmas_.fmt("#pragma HLS data_pack variable={} struct_level\n", param->unique_name());
@@ -714,7 +732,7 @@ std::string CCodeGen::prepare(const Scope& scope) {
     func_impls_.fmt("{} {{", emit_fun_head(cont));
     func_impls_.fmt("\t\n");
 
-    if (lang_ == Lang::HLS && cont->is_exported()) {
+    if (lang_ == Lang::HLS && is_exported(cont)) {
         if (cont->name() == "hls_top") {
             if (interface_status) {
                 if (cont->num_params() > 2) {
@@ -767,7 +785,7 @@ std::string CCodeGen::prepare(const Scope& scope) {
     for (auto param : cont->params()) {
         if (!is_concrete(param))
             continue;
-        if (lang_ == Lang::OpenCL && cont->is_exported() && is_passed_via_buffer(param))
+        if (lang_ == Lang::OpenCL && is_exported(cont) && is_passed_via_buffer(param))
             func_impls_.fmt("{} {} = *{}_;\n", convert(param->type()), param->unique_name(), param->unique_name());
     }
     return {};
@@ -906,7 +924,7 @@ void CCodeGen::emit_epilogue(Continuation* cont) {
         emit_debug_info(bb.tail, body->arg(0));
     }
 
-    if ((lang_ == Lang::OpenCL || (lang_ == Lang::HLS && hls_top_scope)) && (cont->is_exported()))
+    if ((lang_ == Lang::OpenCL || (lang_ == Lang::HLS && hls_top_scope)) && is_exported(cont))
         emit_fun_decl(cont);
 
     if (body->callee() == world().branch()) {
@@ -1559,9 +1577,9 @@ std::string CCodeGen::emit_fun_head(Continuation* cont, bool is_proto) {
     StringStream s;
 
     // Emit function qualifiers
-    auto config = cont->is_exported() && kernel_configs_.count(cont->name())
+    auto config = is_exported(cont) && kernel_configs_.count(cont->name())
         ? kernel_configs_.find(cont->name())->second.get() : nullptr;
-    if (cont->is_exported()) {
+    if (is_exported(cont)) {
         auto config = kernel_configs_.find(cont->name());
         switch (lang_) {
             default: break;
@@ -1594,13 +1612,12 @@ std::string CCodeGen::emit_fun_head(Continuation* cont, bool is_proto) {
         }
     } else if (lang_ == Lang::CUDA) {
         s << "__device__ ";
-    } else if (!world().is_external(cont)) {
+    } else if (!is_imported(cont) || is_exported(cont)) {
+        // internal continuations
         s << "static ";
     }
 
-    s.fmt("{} {}(",
-        convert(mangle_return_type(cont->type()->return_param_type())),
-        !world().is_external(cont) ? cont->unique_name() : cont->name());
+    s.fmt("{} {}(", convert(mangle_return_type(cont->type()->return_param_type())), get_symbol_name(cont));
 
     // Emit and store all first-order params
     bool needs_comma = false;
@@ -1617,11 +1634,11 @@ std::string CCodeGen::emit_fun_head(Continuation* cont, bool is_proto) {
         if (needs_comma) s.fmt(", ");
 
         // TODO: This should go in favor of a prepare pass that rewrites the kernel parameters
-        if (lang_ == Lang::OpenCL && cont->is_exported() && is_passed_via_buffer(param)) {
+        if (lang_ == Lang::OpenCL && is_exported(cont) && is_passed_via_buffer(param)) {
             // OpenCL structs are passed via buffer; the parameter is a pointer to this buffer
             s << "__global " << convert(param->type()) << "*";
             if (!is_proto) s.fmt(" {}_", param->unique_name());
-        } else if (lang_ == Lang::HLS && cont->is_exported() && param->type()->isa<PtrType>() && param->type()->as<PtrType>()->pointee()->isa<ArrayType>()) {
+        } else if (lang_ == Lang::HLS && is_exported(cont) && param->type()->isa<PtrType>() && param->type()->as<PtrType>()->pointee()->isa<ArrayType>()) {
             auto array_size = config->as<HLSKernelConfig>()->param_size(param);
             assert(array_size > 0);
             auto ptr_type = param->type()->as<PtrType>();
@@ -1642,7 +1659,7 @@ std::string CCodeGen::emit_fun_head(Continuation* cont, bool is_proto) {
 
         } else {
             std::string qualifier;
-            if (cont->is_exported() && (lang_ == Lang::OpenCL || lang_ == Lang::CUDA) &&
+            if (is_exported(cont) && (lang_ == Lang::OpenCL || lang_ == Lang::CUDA) &&
                 config && config->as<GPUKernelConfig>()->has_restrict() &&
                 param->type()->isa<PtrType>())
             {
@@ -1660,7 +1677,7 @@ std::string CCodeGen::emit_fun_head(Continuation* cont, bool is_proto) {
 std::string CCodeGen::emit_fun_decl(Continuation* cont) {
     if (cont->cc() != CC::Device)
         func_decls_.fmt("{};\n", emit_fun_head(cont, true));
-    return !world().is_external(cont) ? cont->unique_name() : cont->name();
+    return get_symbol_name(cont);
 }
 
 Stream& CCodeGen::emit_debug_info(Stream& s, const Def* def) {
@@ -1670,13 +1687,11 @@ Stream& CCodeGen::emit_debug_info(Stream& s, const Def* def) {
 }
 
 void CCodeGen::emit_c_int() {
-    for (auto def : world().defs()) {
+    for (auto& [_, def] : world().externals()) {
         auto cont = def->isa_nom<Continuation>();
         if (!cont)
             continue;
-        if (!cont->is_external())
-            continue;
-        if (cont->cc() != CC::C && cont->is_imported())
+        if (cont->cc() != CC::C)
             continue;
 
         // Generate C types for structs used by imported or exported functions
@@ -1691,9 +1706,6 @@ void CCodeGen::emit_c_int() {
                 convert(op);
         }
 
-        // Generate function prototypes only for exported functions
-        if (!cont->is_exported())
-            continue;
         assert(cont->is_returning());
         emit_fun_decl(cont);
     }

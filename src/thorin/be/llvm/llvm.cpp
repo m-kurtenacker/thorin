@@ -369,7 +369,7 @@ CodeGen::emit_module() {
     };
 
     forest.for_each([&](const Scope& scope) {
-        if (scope.entry()->is_exported() && scope.entry()->cc() != CC::Thorin)
+        if (is_exported(scope.entry()))
             enqueue(scope.entry());
     });
 
@@ -417,7 +417,7 @@ CodeGen::emit_module() {
 }
 
 llvm::Function* CodeGen::emit_fun_decl(Continuation* continuation) {
-    std::string name = world().is_external(continuation) ? continuation->name() : continuation->unique_name();
+    std::string name = get_symbol_name(continuation);
     auto f = llvm::cast<llvm::Function>(module().getOrInsertFunction(name, convert_fn_type(continuation)).getCallee()->stripPointerCasts());
     if (machine_) {
         f->addFnAttr("target-cpu", machine().getTargetCPU());
@@ -436,13 +436,13 @@ llvm::Function* CodeGen::emit_fun_decl(Continuation* continuation) {
 #endif
 
     // set linkage
-    if (world().is_external(continuation))
+    if (is_exported(continuation) || is_imported(continuation))
         f->setLinkage(llvm::Function::ExternalLinkage);
     else
         f->setLinkage(llvm::Function::InternalLinkage);
 
     // set calling convention
-    if (continuation->is_exported()) {
+    if (is_exported(continuation)) {
         f->setCallingConv(kernel_calling_convention_);
         emit_fun_decl_hook(continuation, f);
     } else {
@@ -602,7 +602,7 @@ llvm::CallInst* CodeGen::emit_call(llvm::IRBuilder<>& irbuilder, const Def* call
         return call;
     } else if (callee->type()->tag() == Node_FnType) {
         auto call = irbuilder.CreateCall(llvm::cast<llvm::Function>(emit(callee)), args);
-        if (cont->is_exported())
+        if (is_exported(cont))
             call->setCallingConv(kernel_calling_convention_);
         else if (cont->cc() == CC::Device)
             call->setCallingConv(device_calling_convention_);
@@ -1155,18 +1155,18 @@ llvm::Value* CodeGen::emit_global(const Global* global) {
         val = emit(continuation);
     else {
         auto llvm_type = convert(global->alloced_type());
-        auto var = llvm::cast<llvm::GlobalVariable>(module().getOrInsertGlobal(global->is_external() ? global->name().c_str() : global->unique_name().c_str(), llvm_type));
+        auto var = llvm::cast<llvm::GlobalVariable>(module().getOrInsertGlobal(global->is_externally_visible() ? global->name().c_str() : global->unique_name().c_str(), llvm_type));
         var->setConstant(!global->is_mutable());
 
         if (global->init()->isa<Bottom>()) {
-            if (global->is_external())
+            if (global->is_externally_visible())
                 var->setExternallyInitialized(true);
             else
                 var->setInitializer(llvm::Constant::getNullValue(llvm_type)); // HACK
         } else
             var->setInitializer(llvm::cast<llvm::Constant>(emit(global->init())));
 
-        if (global->is_external()) {
+        if (global->is_externally_visible()) {
             var->setAlignment(llvm::Align(4));
             var->setDSOLocal(true);
             var->setUnnamedAddr(llvm::GlobalVariable::UnnamedAddr::None);

@@ -1034,8 +1034,8 @@ const Def* World::closure_env(const Type* type, const thorin::Def* mem, const th
     return cse(new ClosureEnv(*this, type, mem, src, dbg));
 }
 
-const Def* World::global(const Def* init, bool is_mutable, Debug dbg) {
-    return cse(new Global(*this, init, is_mutable, dbg));
+const Def* World::global(const Def* init, bool is_mutable, bool is_imported, Debug dbg) {
+    return cse(new Global(*this, init, is_mutable, is_imported, dbg));
 }
 
 const Def* World::global_immutable_string(const std::string& str, Debug dbg) {
@@ -1046,7 +1046,7 @@ const Def* World::global_immutable_string(const std::string& str, Debug dbg) {
         str_array[i] = literal_qu8(str[i], dbg);
     str_array.back() = literal_qu8('\0', dbg);
 
-    return global(definite_array(str_array, dbg), false, dbg);
+    return global(definite_array(str_array, dbg), false, false, dbg);
 }
 
 const Assembly* World::assembly(const Type* type, Defs inputs, std::string asm_template, ArrayRef<std::string> output_constraints, ArrayRef<std::string> input_constraints, ArrayRef<std::string> clobbers, Assembly::Flags flags, Debug dbg) {

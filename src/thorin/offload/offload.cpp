@@ -46,7 +46,7 @@ std::tuple<std::string, std::string> Offload::register_kernel_for_offloading(con
     imported->attributes().cc = CC::C;
 
     // remove kernel from main world
-    kernel->world().make_external(kernel);
+    kernel->world().make_internal(kernel);
     kernel->destroy("codegen");
 
     backend->kernel_configs_[kernel_name] = std::move(config);

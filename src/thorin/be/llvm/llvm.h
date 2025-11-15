@@ -122,6 +122,24 @@ private:
     int opt_;
 
 protected:
+    bool is_exported(Continuation* cont) {
+        if (cont->cc() != CC::C)
+            return false;
+        return world().is_exported(cont);
+    }
+
+    bool is_imported(Continuation* cont) {
+        if (cont->cc() != CC::C)
+            return false;
+        return !cont->has_body();
+    }
+
+    std::string get_symbol_name(Continuation* cont) {
+        if (is_exported(cont) || is_imported(cont))
+            return cont->name();
+        return cont->unique_name();
+    }
+
     std::unique_ptr<llvm::TargetMachine> machine_;
     llvm::DIBuilder dibuilder_;
     llvm::DICompileUnit* dicompile_unit_;

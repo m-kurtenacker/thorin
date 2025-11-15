@@ -48,12 +48,11 @@ void RecStreamer::run() {
         auto cont = conts.pop();
         s.endl().endl();
 
-        if (cont->world().is_external(cont)) {
-            if (cont->attributes().cc == CC::Thorin)
-                s.fmt("intern ");
-            else
-                s.fmt("extern ");
-        }
+        if (cont->world().is_exported(cont))
+            s.fmt("export \"{}\"", cont->name());
+
+        if (cont->is_imported())
+            s.fmt("import \"{}\"", cont->name());
 
         Scope scope(cont);
         if (!scope.has_free_params())
@@ -151,10 +150,9 @@ Stream& Def::stream1(Stream& s) const {
         s.fmt(": ({, })\b", ass->ops());
         return s;
     } else if (auto global = isa<Global>()) {
-        if (global->is_external())
-            return s.fmt("{}", unique_name());
-        else
-            return s.fmt("{}({, })", op_name(), ops());
+        if (world().is_exported(global))
+            s.fmt("export \"{}\"", name());
+        return s.fmt("{}({, })", op_name(), ops());
     }
 
     return s.fmt("{}({, })", op_name(), ops());

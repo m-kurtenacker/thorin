@@ -138,7 +138,7 @@ void Continuation::rebuild_from(Rewriter& rewriter, const Def* old) {
 
     set_filter(rewriter.instantiate(ocont->filter())->as<Filter>());
 
-    if (ocont->is_external())
+    if (ocont->world().is_exported(ocont))
         world().make_external(this);
 
     if (ocont->has_body()) {
@@ -177,6 +177,7 @@ const Param* Continuation::ret_param() const {
 }
 
 void Continuation::destroy(const char* cause) {
+    assert(!world().is_exported(this));
     world().ddef(this, "{} has been destroyed by {}", this, cause);
     destroy_filter();
     unset_op(0);
@@ -305,7 +306,9 @@ void Continuation::set_intrinsic() {
 
 bool Continuation::is_basicblock() const { return type()->is_basicblock(); }
 bool Continuation::is_returning() const { return type()->is_returning(); }
-bool Continuation::is_external() const { return world().is_external(this); }
+
+bool Continuation::is_imported() const { return !has_body() && !is_intrinsic(); }
+bool Continuation::is_signature_fixed() const { return world().is_exported(this) || is_imported(); }
 
 void Continuation::jump(const Def* callee, Defs args, Debug dbg) {
     set_body(world().app(callee, args, dbg));

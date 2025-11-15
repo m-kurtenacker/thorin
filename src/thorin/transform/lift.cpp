@@ -61,7 +61,7 @@ DefSet spillable_free_defs(Continuation* entry, ScopesForest& forest, DefSet& re
 }
 
 bool is_closure_convertible(Continuation* cont) {
-    if (cont->is_external() || cont->is_intrinsic())
+    if (cont->is_signature_fixed() || cont->is_intrinsic())
         return false;
     return true;
 }

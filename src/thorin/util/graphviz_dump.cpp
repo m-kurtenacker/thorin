@@ -247,10 +247,10 @@ std::string DotPrinter::dump_continuation(Continuation* cont) {
     file << endl() << def_id(cont) << " [" << up();
 
     file << endl() << "label = \"";
-    if (cont->is_external())
+    if (cont->world().is_exported(cont))
         file << "[extern]\\n";
     auto name = cont->name();
-    if (!cont->is_external())
+    if (!cont->world().is_exported(cont))
         name = cont->unique_name();
 
     file << name << "(";
@@ -266,7 +266,7 @@ std::string DotPrinter::dump_continuation(Continuation* cont) {
         file << endl() << "color = lightblue;";
         file << endl() << "style = filled;";
     }
-    if (cont->is_external()) {
+    if (cont->world().is_exported(cont)) {
         file << endl() << "color = pink;";
         file << endl() << "style = filled;";
     }

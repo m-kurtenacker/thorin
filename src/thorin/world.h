@@ -93,8 +93,8 @@ public:
     const Externals& externals() const { return data_.externals_; }
     void make_external(Def* cont) { assert(&cont->world() == this); data_.externals_.emplace(cont->unique_name(), cont); }
     void make_internal(Def* cont) { assert(&cont->world() == this); data_.externals_.erase(cont->unique_name()); }
-    bool is_external(const Def* cont) { return data_.externals_.contains(cont->unique_name()); }
-    Def* lookup(const std::string& name) { return data_.externals_.lookup(name).value_or(nullptr); }
+    bool is_exported(const Def* cont) { return data_.externals_.contains(cont->unique_name()); }
+    //Def* lookup(const std::string& name) { return data_.externals_.lookup(name).value_or(nullptr); }
     DEBUG_UTIL Continuation* find_cont(const char* name) {
         for (auto cont : copy_continuations()) {
             if (cont->unique_name() == name)
@@ -255,7 +255,7 @@ public:
     const Def* closure_env(const Type* env_type, const Def* mem, const Def* closure, Debug dbg = {});
     const Def* heap_cell(const Def* contents, Debug dbg = {}) { return cse(new Cell(*this, ptr_type(contents->type()), contents, true, dbg)); }
     const Def* stack_cell(const Def* contents, Debug dbg = {}) { return cse(new Cell(*this, ptr_type(contents->type()), contents, false, dbg)); }
-    const Def* global(const Def* init, bool is_mutable = true, Debug dbg = {});
+    const Def* global(const Def* init, bool is_mutable = true, bool is_imported = false, Debug dbg = {});
     const Def* global_immutable_string(const std::string& str, Debug dbg = {});
     const Def* lea(const Def* ptr, const Def* index, Debug dbg);
     const Assembly* assembly(const Type* type, Defs inputs, std::string asm_template, ArrayRef<std::string> output_constraints,

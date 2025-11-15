@@ -61,10 +61,10 @@ bool is_single_kernel(Continuation* kernel) {
 
 void hls_annotate_top(World& world, const Top2Kernel& top2kernel, KernelConfigs& cont2config) {
     auto find_kernel_by_name = [&] (const std::string& name) {
-        for (auto def : world.defs()) {
+        for (auto& [_, def] : world.externals()) {
             auto continuation = def->isa_nom<Continuation>();
             if (!continuation) continue;
-            if (continuation->is_exported() && continuation->name() == name)
+            if (continuation->name() == name)
                 return continuation;
         }
         return (Continuation*)nullptr;

@@ -53,7 +53,7 @@ void inliner(std::unique_ptr<World>& world) {
     };
 
     auto is_candidate = [&] (Continuation* continuation) -> Scope* {
-        if (continuation->has_body() && continuation->order() > 1 && !continuation->is_external()) {
+        if (continuation->has_body() && continuation->order() > 1) {
             auto scope = get_scope(continuation);
             if (scope->defs().size() < scope->entry()->num_params() * factor + offset) {
                 // check that the function is not recursive to prevent inliner from peeling loops

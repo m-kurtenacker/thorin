@@ -20,7 +20,7 @@ const Def* Importer::rewrite(const Def* const odef) {
     } else if (auto app = odef->isa<App>()) {
         // eat calls to known continuations that are only used once
         if (auto callee = app->callee()->isa_nom<Continuation>()) {
-            if (callee->has_body() && !src().is_external(callee) && callee->can_be_inlined()) {
+            if (callee->has_body() && /* exported stuff can't disappear */ !src().is_exported(callee) && callee->can_be_inlined()) {
                 todo_ = true;
                 src().VLOG("simplify: inlining continuation {} because it is called exactly once", callee);
                 for (size_t i = 0; i < callee->num_params(); i++)
@@ -37,8 +37,8 @@ const Def* Importer::rewrite(const Def* const odef) {
             auto callee = body->callee();
             auto& scope = forest_->get_scope(cont);
             if (!scope.contains(callee)) {
-                // avoid messing with external continuations
-                if (src().is_external(cont))
+                // exported stuff can't disappear
+                if (src().is_exported(cont))
                     goto rebuild;
 
                 auto only_called = [&]() -> bool {
@@ -130,10 +130,7 @@ void import_world(World& dst, World& src) {
     Importer importer(src, dst);
 
     for (auto&& [_, def] : src.externals()) {
-        if (auto cont = def->isa<Continuation>(); cont && cont->is_exported())
-            importer.import(cont);
-        if (auto global = def->isa<Global>(); global && global->is_external())
-            importer.import(global);
+        importer.import(def);
     }
 }
 

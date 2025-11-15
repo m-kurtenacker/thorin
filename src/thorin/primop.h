@@ -539,16 +539,17 @@ private:
  */
 class Global : public Def {
 private:
-    Global(World& world, const Def* init, bool is_mutable, Debug dbg);
+    Global(World& world, const Def* init, bool is_mutable, bool is_imported, Debug dbg);
 
 public:
     const Def* init() const { return op(0); }
     bool is_mutable() const { return is_mutable_; }
+    bool is_imported() const { return is_imported_; }
     const PtrType* type() const { return Def::type()->as<PtrType>(); }
     const Type* alloced_type() const { return type()->pointee(); }
     const char* op_name() const override;
 
-    bool is_external() const;
+    bool is_externally_visible() const;
     void set_init(const Def* new_init) { unset_op(0); set_op(0, new_init); }
     const Def* rebuild(World&, const Type*, Defs) const override;
 
@@ -557,6 +558,7 @@ private:
     bool equal(const Def* other) const override { return this == other; }
 
     bool is_mutable_;
+    bool is_imported_;
 
     friend class World;
 };

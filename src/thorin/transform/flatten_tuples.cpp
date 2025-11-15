@@ -183,7 +183,7 @@ static void flatten_tuples(std::unique_ptr<World>& world, size_t max_tuple_size)
             // do not change the signature of intrinsic/external functions
             if (!cont->has_body() ||
                 cont->is_intrinsic() ||
-                world->is_external(cont) ||
+                cont->is_signature_fixed() ||
                 is_passed_to_accelerator(cont))
                 continue;
 

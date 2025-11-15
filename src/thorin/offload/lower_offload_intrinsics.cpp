@@ -397,7 +397,7 @@ auto build_setup_args_fn(World& world, const Def*& mem, ArrayRef<const Def*> arg
         mem = world.store(mem, world.lea(pointers, world.literal_pu32(i, {}), {}), world.bitcast(ptr_ty, arg_on_stack));
         sizes.push_back(world.size_of(args[i]->type()));
     }
-    auto sizes_global = world.global(world.definite_array(world.type_qs64(), sizes), false, {"sizes"});
+    auto sizes_global = world.global(world.definite_array(world.type_qs64(), sizes), false, false, {"sizes"});
     auto dummy_closure = world.closure(world.closure_type(setup_args_fn->type()->types()));
     auto self_param = setup_args_fn->append_param(dummy_closure->type());
     auto env = world.closure_env(pointers->type(), setup_args_fn->mem_param(), self_param);
@@ -432,7 +432,7 @@ void emit_vulkan_offload(RuntimeAPI& api, Continuation* continuation) {
         stages.push_back(world.tuple({shader_type, world.bitcast(ptr_ty, world.global_immutable_string(fn)), world.bitcast(ptr_ty, world.global_immutable_string(kn)) }));
     }
     auto stages_definite = world.definite_array(world.tuple_type({ world.type_pu32(), ptr_ty, ptr_ty }), stages);
-    auto stages_global = world.global(stages_definite, true);
+    auto stages_global = world.global(stages_definite, false);
 
     auto struct_t = ret->type()->as<ReturnType>()->types()[1]->as<StructType>();
     std::vector<const Def*> agg;
