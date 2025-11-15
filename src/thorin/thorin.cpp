@@ -47,7 +47,7 @@ void Thorin::compile() {
     RUN_PASS(world_container(), flatten_tuples(world_container()));
     RUN_PASS(world_container(), split_slots(world_container()));
     RUN_PASS(world_container(), lower_offloaded_kernels(world_container(), offload()));
-    RUN_PASS(world_container(), lift(*this));
+    RUN_PASS(world_container(), lift(world_container()));
     //RUN_PASS(inliner(*this))
     RUN_PASS(world_container(), hoist_enters(world_container()));
     RUN_PASS(world_container(), dead_load_opt(world()));

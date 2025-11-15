@@ -67,7 +67,7 @@ bool is_closure_convertible(Continuation* cont) {
 }
 
 struct ClosureConverter {
-    ClosureConverter(World& src, World& dst, Thorin& thorin) : src_(src), dst_(dst), thorin_(thorin), root_rewriter_(*this, nullptr, nullptr), forest_(src) {
+    ClosureConverter(World& src, World& dst) : src_(src), dst_(dst), root_rewriter_(*this, nullptr, nullptr), forest_(src) {
         assert(&src != &dst);
     }
 
@@ -299,7 +299,6 @@ struct ClosureConverter {
     World& dst_;
     World& src() { return src_; }
     World& dst() { return dst_; }
-    Thorin& thorin_;
 
     ScopeRewriter root_rewriter_;
     ScopesForest forest_;
@@ -538,10 +537,9 @@ void validate_all_returning_functions_top_level(World& world) {
     }
 }
 
-void lift(Thorin& thorin) {
-    auto& src = thorin.world_container();
+void lift(std::unique_ptr<World>& src) {
     auto dst = std::make_unique<World>(*src);
-    ClosureConverter converter(*src, *dst, thorin);
+    ClosureConverter converter(*src, *dst);
 
     converter.scan();
 
@@ -552,8 +550,7 @@ void lift(Thorin& thorin) {
     validate_all_returning_functions_top_level(*dst);
     dst->mark_cff(true);
 
-    src.swap(dst);
-    thorin.cleanup();
+    std::swap(src, dst);
 }
 
 }

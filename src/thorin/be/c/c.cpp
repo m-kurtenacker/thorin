@@ -8,9 +8,11 @@
 #include "thorin/transform/hls_channels.h"
 #include "thorin/transform/cleanup_world.h"
 #include "thorin/transform/lower_closure_env.h"
+#include "thorin/transform/fungl_lower.h"
 #include "thorin/be/emitter.h"
 #include "thorin/util/stream.h"
 #include "c.h"
+#include "thorin/transform/lift.h"
 
 #include <cctype>
 #include <cmath>
@@ -1846,7 +1848,9 @@ void emit_c_int(Thorin& thorin, Stream& stream) {
     std::string flags;
     // Do not emit C interfaces for definitions that are not used
     auto copy = clone_world(thorin.world());
-    cleanup_world(copy);
+    RUN_PASS(copy, lift(copy));
+    RUN_PASS(copy, cleanup_world(copy));
+    RUN_PASS(copy, fungl_lower(copy, false));
     CCodeGen(*copy, {}, stream, Lang::C99, false, flags).emit_c_int();
 }
 
