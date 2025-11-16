@@ -130,6 +130,8 @@ if(THORIN_ENABLE_JSON)
     list(APPEND THORIN_SOURCES
         be/json/json.cpp
         be/json/json.h
+        fe/json/json.cpp
+        fe/json/json.h
     )
 endif()
 
