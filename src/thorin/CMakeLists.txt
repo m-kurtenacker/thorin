@@ -19,6 +19,8 @@ set(THORIN_SOURCES
     world.h
     analyses/cfg.cpp
     analyses/cfg.h
+    analyses/compare.cpp
+    analyses/compare.h
     analyses/domtree.cpp
     analyses/domtree.h
     analyses/free_defs.cpp
