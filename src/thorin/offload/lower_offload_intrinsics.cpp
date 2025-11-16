@@ -33,7 +33,6 @@ struct RuntimeAPI {
             Array<const Type*> p = concat<const Type*>(mem_ty, concat<const Type*>(dom, r));
             auto c = world.continuation(world.fn_type(p), name);
             c->attributes_.cc = CC::C;
-            world.make_external(c);
             return c;
         };
 
