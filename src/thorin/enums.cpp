@@ -23,6 +23,17 @@ const char* tag2str(NodeTag tag) {
     }
 }
 
+NodeTag str2tag(std::string_view str) {
+#define THORIN_GLUE(pre, next)
+#define THORIN_PRIMTYPE(T)     if(str == #T) return Node_PrimType_##T;
+#define THORIN_NODE(n, abbr)   if(str == #n) return Node_##n;
+#define THORIN_ARITHOP(n)      if(str == #n) return Node_##n;
+#define THORIN_CMP(n)          if(str == #n) return Node_##n;
+#define THORIN_MATHOP(n)       if(str == #n) return Node_##n;
+#include "thorin/tables/allnodes.h"
+    THORIN_UNREACHABLE;
+}
+
 int num_bits(PrimTypeTag tag) {
     switch (tag) {
         case PrimType_bool: return 1;

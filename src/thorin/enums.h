@@ -104,6 +104,7 @@ template<class T> struct type2tag {};
 #include "thorin/tables/primtypetable.h"
 
 const char* tag2str(NodeTag tag);
+NodeTag str2tag(std::string_view str);
 int num_bits(PrimTypeTag);
 
 CmpTag negate(CmpTag tag);
