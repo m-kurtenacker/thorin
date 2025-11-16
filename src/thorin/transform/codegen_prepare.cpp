@@ -52,8 +52,8 @@ void codegen_prepare(std::unique_ptr<World>& world) {
     auto destination = std::make_unique<World>(src);
     CodegenPrepare pass(src, *destination.get());
 
-    for (auto& external : src.externals())
-        pass.instantiate(external.second);
+    for (auto& [_, external] : src.externals())
+        pass.instantiate(external);
 
     std::swap(world, destination);
     world->VLOG("end codegen_prepare");

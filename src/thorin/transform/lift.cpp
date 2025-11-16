@@ -543,8 +543,8 @@ void lift(std::unique_ptr<World>& src) {
 
     converter.scan();
 
-    for (auto& external : src->externals())
-        converter.root_rewriter().instantiate(external.second);
+    for (auto& [_, external] : src->externals())
+        converter.root_rewriter().instantiate(external);
 
     converter.validate_all_closure_fns_are_top_level();
     validate_all_returning_functions_top_level(*dst);

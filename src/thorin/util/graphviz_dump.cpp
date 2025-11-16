@@ -281,8 +281,8 @@ std::string DotPrinter::dump_continuation(Continuation* cont) {
 
 DEBUG_UTIL void dump_dot_world(World& world) {
     DotPrinter printer(world);
-    for (auto& external: world.externals()) {
-        printer.dump_def(external.second);
+    for (auto& [_, external]: world.externals()) {
+        printer.dump_def(external);
     }
     printer.run();
 }

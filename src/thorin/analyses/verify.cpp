@@ -28,8 +28,8 @@ static bool verify_calls(World& world, ScopesForest& forest) {
 static bool verify_top_level(World& world, ScopesForest& forest) {
     bool ok = true;
     unique_queue<DefSet> defs;
-    for (auto& external : world.externals())
-        defs.push(external.second);
+    for (auto& [_, external] : world.externals())
+        defs.push(external);
     while (!defs.empty()) {
         auto def = defs.pop();
         if (auto cont = def->isa_nom<Continuation>()) {

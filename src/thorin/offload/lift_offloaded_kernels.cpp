@@ -166,8 +166,8 @@ void lower_offloaded_kernels(std::unique_ptr<World>& src, Offload& offload) {
     auto dst = std::make_unique<World>(*src);
     LiftOffloadedKernel converter(*src, *dst, offload);
 
-    for (auto& external : src->externals()) {
-        auto next = converter.root_->instantiate(external.second);
+    for (auto& [_, external] : src->externals()) {
+        auto next = converter.root_->instantiate(external);
         //dst->make_external(const_cast<Def *>(next));
     }
 
