@@ -9,6 +9,8 @@ struct Comparator {
     Def2Def b_to_a_;
     Def2Def a_to_b_;
 
+    DefSet cache_;
+
     Comparator(World& world) : world_(world) {}
 
     bool fail(const Def* a, const Def* b, std::string message) {
@@ -24,6 +26,8 @@ struct Comparator {
             return fail(a, b, "one pointer is null but the other isn't");
         assert(&a->world() == &world_);
         assert(&a->world() == &b->world());
+        if (cache_.contains(a))
+            return true;
         if (a->tag() != b->tag())
             return fail(a, b, "tags do not match");
         if (a->num_ops() != b->num_ops())
@@ -44,6 +48,7 @@ struct Comparator {
             assert ((a_prime != b_to_a_.end()) == (b_prime != a_to_b_.end()));
             // if it's a match, we now assume they're identical
             if (a_prime != b_to_a_.end()) {
+                cache_.insert(a);
                 return true;
             } else {
                 // if not, introduce the constraint
@@ -72,6 +77,7 @@ struct Comparator {
                 return fail(a, b, "address space does not match");
         }
 
+        cache_.insert(a);
         return true;
     }
 };
