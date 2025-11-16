@@ -4,6 +4,11 @@
 #include "thorin/analyses/scope.h"
 #include "thorin/analyses/free_defs.h"
 
+#include "thorin/analyses/compare.h"
+#include "thorin/be/json/json.h"
+#include "thorin/fe/json/json.h"
+#include "thorin/transform/importer.h"
+
 namespace thorin {
 
 // TODO this needs serious rewriting
@@ -77,6 +82,19 @@ void verify(World& world) {
     ok &= verify_top_level(world, forest);
     //TODO: This should not fail!
     //ok &= verify_param(world);
+    ok &= compare_worlds(world, world);
+    if (getenv("THORIN_VERIFY_SERDES")) {
+        world.log(LogLevel::Info, {}, "Testing json ser-des");
+        json::json j;
+        std::string idc = "";
+        json::CodeGen cg(world, false, idc, idc, idc);
+        cg.emit_json(j);
+        // we clone the reference world too because rebuilding triggers some simplifications!
+        auto rworld = clone_world(world);
+        auto nworld = std::make_unique<World>(world);
+        json::load_defs(*nworld, j);
+        ok &= compare_worlds(*rworld, *nworld);
+    }
     if (!ok)
         world.dump();
     assert(ok);
