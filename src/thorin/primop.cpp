@@ -16,7 +16,7 @@ namespace thorin {
  */
 
 PrimLit::PrimLit(World& world, PrimTypeTag tag, Box box, Debug dbg)
-    : Literal(world, (NodeTag) tag, world.prim_type(tag), dbg)
+    : Literal(world, Node_Literal, world.prim_type(tag), dbg)
     , box_(box)
 {}
 

@@ -130,13 +130,13 @@ Stream& Def::stream1(Stream& s) const {
         return s.fmt("filter({, })", ops());
     } else if (auto lit = isa<PrimLit>()) {
         // print i8 as ints
-        switch (lit->tag()) {
+        switch (lit->primtype_tag()) {
             case PrimType_qs8: return s.fmt("{}∷qs8", (int)      lit->qs8_value());
             case PrimType_ps8: return s.fmt("{}∷ps8", (int)      lit->ps8_value());
             case PrimType_qu8: return s.fmt("{}∷qu8", (unsigned) lit->qu8_value());
             case PrimType_pu8: return s.fmt("{}∷pu8", (unsigned) lit->pu8_value());
             default:
-                switch (lit->tag()) {
+                switch (lit->primtype_tag()) {
 #define THORIN_ALL_TYPE(T, M) case PrimType_##T: return s.fmt("{}∷{}", lit->value().get_##M(), #T);
 #include "thorin/tables/primtypetable.h"
                     default: THORIN_UNREACHABLE;
