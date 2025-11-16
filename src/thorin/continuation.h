@@ -122,40 +122,12 @@ enum class CC : uint8_t {
 
 enum class Intrinsic : uint8_t {
     None,
-    AcceleratorBegin,
-    OffloadBegin = AcceleratorBegin,
-    CUDA = OffloadBegin,    ///< Internal CUDA-Backend.
-    NVVM,                       ///< Internal NNVM-Backend.
-    OpenCL,                     ///< Internal OpenCL-Backend.
-    OpenCL_SPIRV,               ///< Internal OpenCL-Backend.
-    LevelZero_SPIRV,            ///< Internal SPIRV for Level0-Backend.
-    VulkanCS_SPIRV,             ///< Internal SPIRV for Vulkan-Backend.
-    VulkanOffload_SPIRV,        ///< Internal SPIRV for Vulkan-Backend.
-    AMDGPUHSA,                  ///< Internal AMDGPU-HSA-Backend.
-    AMDGPUPAL,                  ///< Internal AMDGPU-PAL-Backend.
-    HLS,                        ///< Internal HLS-Backend.
-    OffloadEnd = HLS,
-    Parallel,                   ///< Internal Parallel-CPU-Backend.
-    Fibers,                     ///< Internal Parallel-CPU-Backend using resumable fibers.
-    Spawn,                      ///< Internal Parallel-CPU-Backend.
-    Sync,                       ///< Internal Parallel-CPU-Backend.
-    Vectorize,                  ///< External vectorizer.
-    AcceleratorEnd,
-    Reserve = AcceleratorEnd,   ///< Intrinsic memory reserve function
-    Atomic,                     ///< Intrinsic atomic function
-    AtomicLoad,                 ///< Intrinsic atomic load function
-    AtomicStore,                ///< Intrinsic atomic store function
-    CmpXchg,                    ///< Intrinsic cmpxchg function
-    CmpXchgWeak,                ///< Intrinsic cmpxchg weak function
-    Fence,                      ///< Intrinsic fence function
-    Undef,                      ///< Intrinsic undef function
-    PipelineContinue,           ///< Intrinsic loop-pipelining-HLS-Backend
-    Pipeline,                   ///< Intrinsic loop-pipelining-HLS-Backend
-    Branch,                     ///< branch(mem, cond, T, F).
-    Match,                      ///< match(mem, val, otherwise, (case1, cont1), (case2, cont2), ...)
-    PeInfo,                     ///< Partial evaluation debug info.
-    EndScope                    ///< Dummy function which marks the end of a @p Scope.
+#define THORIN_INTRINSIC(X, Y) X,
+#include "thorin/tables/intrinsicstable.h"
+#undef THORIN_INTRINSIC
 };
+
+std::string get_intrinsic_name(Intrinsic);
 
 /**
  * A function abstraction.

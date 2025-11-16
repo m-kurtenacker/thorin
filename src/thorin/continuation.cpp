@@ -271,37 +271,36 @@ const Filter* Continuation::all_true_filter() const {
     return world().filter(conditions, debug());
 }
 
-bool Continuation::is_accelerator() const { return Intrinsic::AcceleratorBegin <= intrinsic() && intrinsic() < Intrinsic::AcceleratorEnd; }
+bool Continuation::is_accelerator() const {
+#define THORIN_INTRINSIC(X, Y)
+#define THORIN_ACCELERATOR(X, Y) if (intrinsic() == Intrinsic::X) return true;
+#include "thorin/tables/intrinsicstable.h"
+#undef THORIN_ACCELERATOR
+#undef THORIN_INTRINSIC
+    return false;
+}
 
-bool Continuation::is_offload_intrinsic() const { return Intrinsic::OffloadBegin <= intrinsic() && intrinsic() < Intrinsic::OffloadEnd; }
+bool Continuation::is_offload_intrinsic() const {
+#define THORIN_INTRINSIC(X, Y)
+#define THORIN_OFFLOAD(X, Y) if (intrinsic() == Intrinsic::X) return true;
+#include "thorin/tables/intrinsicstable.h"
+#undef THORIN_OFFLOAD
+#undef THORIN_INTRINSIC
+    return false;
+}
 
 void Continuation::set_intrinsic() {
-    if      (name() == "cuda")           attributes().intrinsic = Intrinsic::CUDA;
-    else if (name() == "nvvm")           attributes().intrinsic = Intrinsic::NVVM;
-    else if (name() == "opencl")         attributes().intrinsic = Intrinsic::OpenCL;
-    else if (name() == "opencl_spirv")   attributes().intrinsic = Intrinsic::OpenCL_SPIRV;
-    else if (name() == "levelzero")      attributes().intrinsic = Intrinsic::LevelZero_SPIRV;
-    else if (name() == "vulkan_cs")      attributes().intrinsic = Intrinsic::VulkanCS_SPIRV;
-    else if (name() == "vulkan_offload") attributes().intrinsic = Intrinsic::VulkanOffload_SPIRV;
-    else if (name() == "amdgpu_hsa")     attributes().intrinsic = Intrinsic::AMDGPUHSA;
-    else if (name() == "amdgpu_pal")     attributes().intrinsic = Intrinsic::AMDGPUPAL;
-    else if (name() == "hls")            attributes().intrinsic = Intrinsic::HLS;
-    else if (name() == "parallel")       attributes().intrinsic = Intrinsic::Parallel;
-    else if (name() == "fibers")         attributes().intrinsic = Intrinsic::Fibers;
-    else if (name() == "spawn")          attributes().intrinsic = Intrinsic::Spawn;
-    else if (name() == "sync")           attributes().intrinsic = Intrinsic::Sync;
-    else if (name() == "vectorize")      attributes().intrinsic = Intrinsic::Vectorize;
-    else if (name() == "pe_info")        attributes().intrinsic = Intrinsic::PeInfo;
-    else if (name() == "pipeline")       attributes().intrinsic = Intrinsic::Pipeline;
-    else if (name() == "reserve_shared") attributes().intrinsic = Intrinsic::Reserve;
-    else if (name() == "atomic")         attributes().intrinsic = Intrinsic::Atomic;
-    else if (name() == "atomic_load")    attributes().intrinsic = Intrinsic::AtomicLoad;
-    else if (name() == "atomic_store")   attributes().intrinsic = Intrinsic::AtomicStore;
-    else if (name() == "cmpxchg")        attributes().intrinsic = Intrinsic::CmpXchg;
-    else if (name() == "cmpxchg_weak")   attributes().intrinsic = Intrinsic::CmpXchgWeak;
-    else if (name() == "fence")          attributes().intrinsic = Intrinsic::Fence;
-    else if (name() == "undef")          attributes().intrinsic = Intrinsic::Undef;
-    else world().ELOG("unsupported thorin intrinsic '{}'", name());
+#define THORIN_INTRINSIC(X, Y) if (Y && name() == std::string(Y)) { attributes().intrinsic = Intrinsic::X; return; }
+#include "thorin/tables/intrinsicstable.h"
+#undef THORIN_INTRINSIC
+    world().ELOG("unsupported thorin intrinsic '{}'", name());
+}
+
+std::string get_intrinsic_name(Intrinsic intrinsic) {
+#define THORIN_INTRINSIC(X, Y) if (intrinsic == Intrinsic::X) { return std::string(Y); }
+#include "thorin/tables/intrinsicstable.h"
+#undef THORIN_INTRINSIC
+    return "none";
 }
 
 bool Continuation::is_basicblock() const { return type()->is_basicblock(); }
