@@ -25,7 +25,7 @@ THORIN_ACCELERATOR(Spawn, "spawn")         ///< Internal Parallel-CPU-Backend.
 THORIN_ACCELERATOR(Sync, "sync")           ///< Internal Parallel-CPU-Backend.
 THORIN_ACCELERATOR(Vectorize, "vectorize") ///< External vectorizer.
 
-THORIN_INTRINSIC(Reserve, "reserve")                    ///< Intrinsic memory reserve function
+THORIN_INTRINSIC(Reserve, "reserve_shared")             ///< Intrinsic memory reserve function
 THORIN_INTRINSIC(Atomic, "atomic")                      ///< Intrinsic atomic function
 THORIN_INTRINSIC(AtomicLoad, "atomic_load")             ///< Intrinsic atomic load function
 THORIN_INTRINSIC(AtomicStore, "atomic_store")           ///< Intrinsic atomic store function
