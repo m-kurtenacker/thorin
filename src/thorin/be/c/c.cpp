@@ -1846,10 +1846,15 @@ void CodeGen::emit_stream(std::ostream& stream) {
 
 void emit_c_int(Thorin& thorin, Stream& stream) {
     std::string flags;
-    // Do not emit C interfaces for definitions that are not used
     auto copy = clone_world(thorin.world());
-    RUN_PASS(copy, lift(copy));
+    // delete all continuation bodies - we're only interested in the exported interface...
+    for (auto& cont : copy->copy_continuations()) {
+        if (cont->has_body())
+            cont->destroy_body();
+    }
+    // Do not emit C interfaces for definitions that are not used
     RUN_PASS(copy, cleanup_world(copy));
+    RUN_PASS(copy, lift(copy));
     RUN_PASS(copy, fungl_lower(copy, false));
     CCodeGen(*copy, {}, stream, Lang::C99, false, flags).emit_c_int();
 }

@@ -184,8 +184,10 @@ public:
     bool has_body() const { return !op(0)->isa<Bottom>(); }
     void set_body(const App* app) {
         unset_op(0);
-        set_op(0, app);
+        if (app)
+            set_op(0, app);
     }
+    void destroy_body();
 
     /// Called to kill the continuation
     void destroy(const char*);

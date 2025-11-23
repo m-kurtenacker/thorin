@@ -169,7 +169,7 @@ bool PartialEvaluator::run() {
 
                     jump_to_dropped_call(continuation, target, specialize);
 
-                    while (callee && callee->never_called()) {
+                    while (callee && callee->never_called() && !world().is_exported(callee)) {
                         if (callee->has_body()) {
                             auto new_callee = const_cast<Continuation*>(callee->body()->callee()->isa<Continuation>());
                             callee->destroy("partial_evaluation");

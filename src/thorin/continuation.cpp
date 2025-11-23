@@ -176,12 +176,16 @@ const Param* Continuation::ret_param() const {
     return (ret_param > 0) ? param(ret_param) : nullptr;
 }
 
+void Continuation::destroy_body() {
+    unset_op(0);
+    set_op(0, world().bottom(world().bottom_type()));
+}
+
 void Continuation::destroy(const char* cause) {
     assert(!world().is_exported(this));
     world().ddef(this, "{} has been destroyed by {}", this, cause);
     destroy_filter();
-    unset_op(0);
-    set_op(0, world().bottom(world().bottom_type()));
+    destroy_body();
     dead_ = true;
 }
 
