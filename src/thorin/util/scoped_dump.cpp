@@ -5,9 +5,9 @@ namespace thorin {
 void ScopedWorld::stream_cont(thorin::Stream& s, Continuation* cont) const {
     s.fmt(Magenta);
     if (world_.is_exported(cont))
-        s.fmt("export \"{}\"", cont->name());
+        s.fmt("export \"{}\" ", cont->name());
     if (cont->is_imported())
-        s.fmt("import \"{}\"", cont->name());
+        s.fmt("import \"{}\" ", cont->name());
     if (cont->is_intrinsic())
         s.fmt("intrinsic ");
 

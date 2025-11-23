@@ -8,6 +8,7 @@
 #include "thorin/be/json/json.h"
 #include "thorin/fe/json/json.h"
 #include "thorin/transform/importer.h"
+#include "thorin/util/scoped_dump.h"
 
 namespace thorin {
 
@@ -45,6 +46,10 @@ static bool verify_top_level(World& world, ScopesForest& forest) {
                 for (auto param : scope.free_params())
                     world.ELOG("top-level continuation '{}' got free param '{}' belonging to continuation {}", scope.entry(), param, param->continuation());
                 world.ELOG("here: {}", scope.entry());
+                ScopedWorld s(world, ScopedWorld::Config { true });
+                Stream str(std::cout);
+                s.stream_cont(str, scope.entry());
+                str.endl();
                 ok = false;
             }
         } else {
@@ -96,7 +101,7 @@ void verify(World& world) {
         ok &= compare_worlds(*rworld, *nworld);
     }
     if (!ok)
-        world.dump();
+        world.dump_scoped(true);
     assert(ok);
 }
 
