@@ -135,7 +135,7 @@ protected:
     }
 
     std::string get_symbol_name(Continuation* cont) {
-        if (is_exported(cont) || is_imported(cont))
+        if (is_exported(cont) || is_imported(cont) || cont->cc() == CC::Device)
             return cont->name();
         return cont->unique_name();
     }
