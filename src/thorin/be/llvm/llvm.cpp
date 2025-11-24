@@ -436,7 +436,7 @@ llvm::Function* CodeGen::emit_fun_decl(Continuation* continuation) {
 #endif
 
     // set linkage
-    if (is_exported(continuation) || is_imported(continuation))
+    if (is_exported(continuation) || is_imported(continuation) || continuation->cc() == CC::Device)
         f->setLinkage(llvm::Function::ExternalLinkage);
     else
         f->setLinkage(llvm::Function::InternalLinkage);
