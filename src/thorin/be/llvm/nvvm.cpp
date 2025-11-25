@@ -26,10 +26,20 @@ NVVMCodeGen::NVVMCodeGen(World& w, const KernelConfigs& kernel_configs, int /* o
     auto triple = llvm::Triple(llvm::sys::getDefaultTargetTriple());
     if (triple.isArch32Bit()) {
         module().setDataLayout("e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64");
+#if LLVM_VERSION_MAJOR >= 21
+        llvm::Triple triple("nvptx-nvidia-cuda");
+        module().setTargetTriple(triple);
+#else
         module().setTargetTriple("nvptx-nvidia-cuda");
+#endif
     } else {
         module().setDataLayout("e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64");
+#if LLVM_VERSION_MAJOR >= 21
+        llvm::Triple triple("nvptx64-nvidia-cuda");
+        module().setTargetTriple(triple);
+#else
         module().setTargetTriple("nvptx64-nvidia-cuda");
+#endif
     }
     // nvvmir.version
     auto nvvmir_version_md = module().getOrInsertNamedMetadata("nvvmir.version");
