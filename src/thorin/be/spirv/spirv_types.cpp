@@ -296,7 +296,9 @@ ConvertedType CodeGen::convert(const Type* type) {
             // extern_type xxx_t = "spirv.type" { OpTypeXXX as u32, (literal as u32, "literal", ()), def_operand, ... }
             if (extern_type->name() == "spirv.type") {
                 spv::Id id = builder_->generate_fresh_id();
-                types_[extern_type] = converted = { id };
+                converted = { id };
+                converted.layout = {0, 1};
+                types_[extern_type] = converted;
                 spv::Op op = static_cast<spv::Op>(thorin::primlit_value<uint32_t>(extern_type->op(0)->as<Literal>()));
 
                 std::vector<const Def*> pattern;
