@@ -133,7 +133,7 @@ llvm::Function* NVVMCodeGen::get_texture_handle_fun(llvm::IRBuilder<>& irbuilder
     // %tex_ref = call i64 @llvm.nvvm.texsurf.handle.p1i64(metadata !{i64 addrspace(1)* @texture, metadata !"texture", i32 1}, i64 addrspace(1)* @texture)
     llvm::Type* types[2] = {
         llvm::Type::getMetadataTy(context()),
-        llvm::PointerType::get(irbuilder.getInt64Ty(), 1)
+        llvm::PointerType::get(context(), 1)
     };
     auto type = llvm::FunctionType::get(irbuilder.getInt64Ty(), types, false);
     return llvm::cast<llvm::Function>(module().getOrInsertFunction("llvm.nvvm.texsurf.handle.p1i64", type).getCallee()->stripPointerCasts());
