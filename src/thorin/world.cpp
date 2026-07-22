@@ -23,7 +23,6 @@
 #include "thorin/primop.h"
 #include "thorin/continuation.h"
 #include "thorin/type.h"
-#include "thorin/analyses/scope.h"
 #include "thorin/analyses/verify.h"
 #include "thorin/transform/closure_conversion.h"
 #include "thorin/transform/codegen_prepare.h"
@@ -63,7 +62,7 @@ const Def* World::variant_index(const Def* value, Debug dbg) {
 const Def* World::variant_extract(const Def* value, size_t index, Debug dbg) {
     auto type = value->type()->as<VariantType>()->op(index)->as<Type>();
     if (auto variant = value->isa<Variant>())
-        return variant->index() == index ? variant->value() : bottom(type);
+        return variant->index() == index ? variant->value() : bottom(type, dbg);
     return cse(new VariantExtract(*this, type, value, index, dbg));
 }
 
@@ -514,7 +513,7 @@ const Def* World::convert(const Type* dst_type, const Def* src, Debug dbg) {
 
 const Def* World::cast(const Type* to, const Def* from, Debug dbg) {
     if (from->isa<Bottom>())
-        return bottom(to);
+        return bottom(to, dbg);
 
     if (from->type() == to)
         return from;
@@ -625,7 +624,7 @@ const Def* World::cast(const Type* to, const Def* from, Debug dbg) {
 
 const Def* World::bitcast(const Type* to, const Def* from, Debug dbg) {
     if (from->isa<Bottom>())
-        return bottom(to);
+        return bottom(to, dbg);
 
     if (from->type() == to)
         return from;
@@ -1025,7 +1024,7 @@ const Def* World::load(const Def* mem, const Def* ptr, Debug dbg) {
     if (auto tuple_type = ptr->type()->as<PtrType>()->pointee()->isa<TupleType>()) {
         // loading an empty tuple can only result in an empty tuple
         if (tuple_type->num_ops() == 0) {
-            return tuple({mem, tuple({}, dbg)});
+            return tuple({mem, tuple({}, dbg)}, dbg);
         }
     }
     return cse(new Load(*this, mem, ptr, dbg));
@@ -1174,8 +1173,8 @@ const App* World::app(const Def* callee, const Defs args, Debug dbg) {
                 if (args.size() == 3) return app(args[2], { args[0] }, dbg);
                 if (auto lit = args[1]->isa<PrimLit>()) {
                     for (size_t i = 3; i < args.size(); i++) {
-                        if (extract(args[i], 0_s)->as<PrimLit>() == lit)
-                            return app(extract(args[i], 1), { args[0] }, dbg);
+                        if (extract(args[i], 0_s, dbg)->as<PrimLit>() == lit)
+                            return app(extract(args[i], 1, dbg), { args[0] }, dbg);
                     }
                     return app(args[2], { args[0] }, dbg);
                 }

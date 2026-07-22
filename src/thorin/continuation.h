@@ -1,11 +1,8 @@
 #ifndef THORIN_CONTINUATION_H
 #define THORIN_CONTINUATION_H
 
-#include <list>
 #include <vector>
-#include <queue>
 
-#include "thorin/config.h"
 #include "thorin/primop.h"
 #include "thorin/type.h"
 
@@ -80,7 +77,7 @@ public:
         return conts;
     }
 
-    void jump(const Def* callee, Defs args, Debug dbg = {});
+    void jump(const Def* callee, Defs args, Debug dbg);
     bool verify() const;
 
     friend class World;
@@ -153,7 +150,7 @@ public:
 
     Continuation* stub(Rewriter&, const Type*) const override;
     void rebuild_from(Rewriter&, const Def* old) override;
-    const Param* append_param(const Type* type, Debug dbg = {});
+    const Param* append_param(const Type* type, Debug dbg);
     Continuations preds() const;
     Continuations succs() const;
     ArrayRef<const Param*> params() const { return params_; }
@@ -199,9 +196,9 @@ public:
     /// Called to kill the continuation
     void destroy(const char*);
 
-    void jump(const Def* callee, Defs args, Debug dbg = {});
-    void branch(const Def* mem, const Def* cond, const Def* t, const Def* f, Debug dbg = {});
-    void match(const Def* mem, const Def* val, Continuation* otherwise, Defs patterns, ArrayRef<Continuation*> continuations, Debug dbg = {});
+    void jump(const Def* callee, Defs args, Debug dbg);
+    void branch(const Def* mem, const Def* cond, const Def* t, const Def* f, Debug dbg);
+    void match(const Def* mem, const Def* val, Continuation* otherwise, Defs patterns, ArrayRef<Continuation*> continuations, Debug dbg);
     bool verify() const;
 
     const Filter* filter() const { return op(1)->as<Filter>(); }

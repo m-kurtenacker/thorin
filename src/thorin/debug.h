@@ -40,8 +40,14 @@ struct Loc : public Streamable<Loc> {
 };
 
 class Debug {
+private:
+    Debug() {
+        //assert(false); //TODO: turn into a warning instead.
+    }; // TODO remove
+    friend class World;
+    friend class TypeTable;
+
 public:
-    Debug() = default; // TODO remove
     Debug(std::string name, Loc loc = {}, const Def* meta = nullptr)
         : name(name)
 #if THORIN_ENABLE_CREATION_CONTEXT

@@ -1,5 +1,3 @@
-#include "thorin/analyses/scope.h"
-#include "thorin/analyses/schedule.h"
 #include "thorin/world.h"
 
 namespace thorin {
@@ -57,7 +55,7 @@ public:
                 // If the loaded value is completely specified, replace the load
                 if (!contains_top(load_value)) {
                     todo_ = true;
-                    load->replace_uses(world_.tuple({ load->mem(), load_value }));
+                    load->replace_uses(world_.tuple({ load->mem(), load_value }, load->debug()));
                 }
             }
             return load->out_mem();
@@ -82,7 +80,7 @@ public:
             for (auto use : frame->uses()) {
                 // All the slots allocated at that point contain bottom
                 assert(use->isa<Slot>());
-                mapping[use.def()] = world_.bottom(use->type()->as<PtrType>()->pointee());
+                mapping[use.def()] = world_.bottom(use->type()->as<PtrType>()->pointee(), use.def()->debug());
             }
             return enter->out_mem();
         } else {

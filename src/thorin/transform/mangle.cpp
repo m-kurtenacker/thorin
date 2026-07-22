@@ -67,14 +67,14 @@ Continuation* Mangler::mangle() {
     }
 
     for (auto def : lift_)
-        insert(def, new_entry()->append_param(def->type()));
+        insert(def, new_entry()->append_param(def->type(), new_entry()->debug()));
 
     // if we are dropping parameters, we can't necessarily rewrite the entry, see also note about applications in Mangler::rewrite()
     if (is_dropping_)
         insert(old_entry(), old_entry());
     else {
         // if we're only adding parameters, we can replace the entry by a small wrapper calling into the lifted entry
-        auto recursion_wrapper = dst().continuation(old_entry()->type());
+        auto recursion_wrapper = dst().continuation(old_entry()->type(), old_entry()->debug());
         insert(old_entry(), recursion_wrapper);
         std::vector<const Def*> args;
         for (auto p : recursion_wrapper->params_as_defs())
@@ -82,7 +82,7 @@ Continuation* Mangler::mangle() {
         size_t i = 0;
         for ([[maybe_unused]] auto def : lift_)
             args.push_back(new_entry()->param(recursion_wrapper->num_params() + i++));
-        recursion_wrapper->jump(new_entry(), args);
+        recursion_wrapper->jump(new_entry(), args, recursion_wrapper->debug());
     }
 
     // cut/widen filter
@@ -95,7 +95,7 @@ Continuation* Mangler::mangle() {
         }
 
         for (size_t e = new_entry()->num_params(); j != e; ++j)
-            new_conditions[j] = dst().literal_bool(false, Debug{});
+            new_conditions[j] = dst().literal_bool(false, new_entry()->debug());
 
         new_entry()->set_filter(dst().filter(new_conditions, old_entry()->filter()->debug()));
     }
@@ -119,17 +119,17 @@ const Def* Mangler::rewrite(const Def* old_def) {
             if (auto lit = condition->isa<PrimLit>()) {
                 auto mem = instantiate(app->arg(0));
                 auto target = lit->value().get_bool() ? instantiate(app->arg(2)) : instantiate(app->arg(3));
-                return dst().app(target, { mem });
+                return dst().app(target, { mem }, br->debug());
             }
         }
         if (auto sw = app->callee()->isa_nom<Continuation>(); sw && sw->intrinsic() == Intrinsic::Match) {
             auto index = instantiate(app->arg(1));
             if (auto lit = index->isa<PrimLit>()) {
                 for (size_t i = 3; i < app->num_args(); i++) {
-                    auto opattern = src().extract(app->arg(i), 0_s)->as<PrimLit>();
+                    auto opattern = src().extract(app->arg(i), 0_s, app->debug())->as<PrimLit>();
                     if (instantiate(opattern) == lit) {
                         auto mem = instantiate(app->arg(0));
-                        auto target = dst().extract(instantiate(app->arg(i)), 1);
+                        auto target = dst().extract(instantiate(app->arg(i)), 1, app->debug());
                         return dst().app(target, { mem }, old_def->debug());
                     }
                 }

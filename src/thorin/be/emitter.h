@@ -4,6 +4,8 @@
 #include<stack>
 #include<queue>
 
+#include "thorin/analyses/schedule.h"
+
 namespace thorin {
 
 template<class Value, class Type, class BB, class Child>

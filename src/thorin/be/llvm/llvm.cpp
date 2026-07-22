@@ -1,7 +1,6 @@
 #include "thorin/be/llvm/llvm.h"
 
 #include <algorithm>
-#include <stdexcept>
 #include <unordered_map> // TODO don't used std::unordered_*
 
 #include <llvm/TargetParser/Triple.h>
@@ -876,9 +875,9 @@ llvm::Value* CodeGen::emit_builder(llvm::IRBuilder<>& irbuilder, const Def* def)
             llvm::Value* env = nullptr;
             if (is_thin(closure->op(1)->type())) {
                 if (is_type_unit(val->type())) {
-                    env = emit(world().bottom(Closure::environment_type(world())));
+                    env = emit(world().bottom(Closure::environment_type(world()), val->debug()));
                 } else {
-                    env = emit(world().cast(Closure::environment_type(world()), val));
+                    env = emit(world().cast(Closure::environment_type(world()), val, val->debug()));
                 }
             } else {
                 world().wdef(def, "closure '{}' is leaking memory, type '{}' is too large", def, agg->op(1)->type());

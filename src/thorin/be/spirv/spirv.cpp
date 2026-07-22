@@ -1,8 +1,6 @@
 #include "spirv_private.h"
 
 #include "thorin/analyses/scope.h"
-#include "thorin/analyses/schedule.h"
-#include "thorin/analyses/domtree.h"
 
 #include <iostream>
 
@@ -550,8 +548,8 @@ std::vector<Id> CodeGen::emit_args(Defs defs) {
     return emitted;
 }
 
-Id CodeGen::literal(uint32_t value) {
-    return emit(world().literal_pu32(value, {}));
+Id CodeGen::literal(uint32_t value, Debug dbg) {
+    return emit(world().literal_pu32(value, dbg));
 }
 
 Id CodeGen::emit_composite(BasicBlockBuilder* bb, Id t, Defs defs) {
@@ -793,7 +791,7 @@ Id CodeGen::emit_bb(BasicBlockBuilder* bb, const Def* def) {
             return bb->ptr_access_chain(type, base, offset, {  });
         }
         if (target_info_.bugs.static_ac_indices_must_be_i32)
-            offset = emit(world().cast(world().type_pu32(), lea->index()));
+            offset = emit(world().cast(world().type_pu32(), lea->index(), lea->debug()));
         return bb->access_chain(type, emit(lea->ptr()), { offset });
     } else if (auto aggop = def->isa<AggOp>()) {
         auto agg_type = convert(aggop->agg()->type()).id;

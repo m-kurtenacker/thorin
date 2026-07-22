@@ -4,7 +4,6 @@
 #include "thorin/def.h"
 #include "thorin/enums.h"
 #include "thorin/util/hash.h"
-#include "thorin/util/cast.h"
 #include "thorin/util/stream.h"
 #include "thorin/util/array.h"
 #include "thorin/util/symbol.h"
@@ -45,7 +44,7 @@ protected:
 
 class Star : public Type {
 protected:
-    explicit Star(World& w) : Type(w, Node_Star, nullptr, 0, {}) {
+    explicit Star(World& w, Debug dbg) : Type(w, Node_Star, nullptr, 0, dbg) {
         set_type(this);
     }
 

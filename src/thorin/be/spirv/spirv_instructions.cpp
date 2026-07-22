@@ -154,7 +154,7 @@ std::vector<Id> CodeGen::emit_intrinsic(const App& app, const Continuation* intr
             return { bb->ext_instruction(convert(get_produced_type()).id, { .set_name = "OpenCL.std", .id = OpenCLLIB::SMax }, emit_args(app.args().skip_back())) };
     } else if (intrinsic->name() == "barrier") {
         emit_args(app.args().skip_back());
-        bb->op(spv::Op::OpControlBarrier, { literal(spv::Scope::ScopeWorkgroup), literal(spv::Scope::ScopeWorkgroup), literal(spv::MemorySemanticsMask::MemorySemanticsWorkgroupMemoryMask | spv::MemorySemanticsMask::MemorySemanticsSequentiallyConsistentMask) });
+        bb->op(spv::Op::OpControlBarrier, { literal(spv::Scope::ScopeWorkgroup, app.debug()), literal(spv::Scope::ScopeWorkgroup, app.debug()), literal(spv::MemorySemanticsMask::MemorySemanticsWorkgroupMemoryMask | spv::MemorySemanticsMask::MemorySemanticsSequentiallyConsistentMask, app.debug()) });
         return { };
     } else if (intrinsic->name() == "atomic_add") {
         auto args = emit_args(app.args().skip_back());
@@ -175,7 +175,7 @@ std::vector<Id> CodeGen::emit_intrinsic(const App& app, const Continuation* intr
         else
             assert(false && "unknown primitive type for atomic_add");
         auto [scope, semantics] = addrspace_atomics_params(world(), app.arg(1)->type()->as<PtrType>()->addr_space());
-        auto result = bb->op_with_result(op, convert(get_produced_type()).id,  { ptr, literal(scope), literal(semantics), value });
+        auto result = bb->op_with_result(op, convert(get_produced_type()).id,  { ptr, literal(scope, app.debug()), literal(semantics, app.debug()), value });
         return { result };
     } else if (intrinsic->name() == "atomic_min") {
         auto args = emit_args(app.args().skip_back());
@@ -198,11 +198,11 @@ std::vector<Id> CodeGen::emit_intrinsic(const App& app, const Continuation* intr
         else
             assert(false && "unknown primitive type for atomic_add");
         auto [scope, semantics] = addrspace_atomics_params(world(), app.arg(1)->type()->as<PtrType>()->addr_space());
-        auto result = bb->op_with_result(op, convert(get_produced_type()).id,  { ptr, literal(scope), literal(semantics), value });
+        auto result = bb->op_with_result(op, convert(get_produced_type()).id,  { ptr, literal(scope, app.debug()), literal(semantics, app.debug()), value });
         return { result };
     } else if (intrinsic->name() == "rv_all") {
         auto args = emit_args(app.args().skip_back());
-        auto result = bb->op_with_result(spv::Op::OpGroupAll, convert(get_produced_type()).id,  { literal(spv::Scope::ScopeInvocation), emit(app.arg(1)) });
+        auto result = bb->op_with_result(spv::Op::OpGroupAll, convert(get_produced_type()).id,  { literal(spv::Scope::ScopeInvocation, app.debug()), emit(app.arg(1)) });
         return { result };
     }
     world().ELOG("thorin/spirv: Intrinsic '{}' isn't recognised", intrinsic->name());

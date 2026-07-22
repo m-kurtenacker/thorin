@@ -75,7 +75,7 @@ Continuation::Continuation(World& w, const FnType* pi, const Attributes& attribu
 {
     assert(pi->tag() == Node_FnType && "continuations may not be closures");
     params_.reserve(pi->num_ops());
-    set_op(0, world().bottom(world().bottom_type()));
+    set_op(0, world().bottom(world().bottom_type(), dbg));
     set_op(1, world().filter({}, dbg));
 
     size_t i = 0;
@@ -159,7 +159,7 @@ void Continuation::destroy(const char* cause) {
     world().ddef(this, "{} has been destroyed by {}", this, cause);
     destroy_filter();
     unset_op(0);
-    set_op(0, world().bottom(world().bottom_type()));
+    set_op(0, world().bottom(world().bottom_type(), debug()));
     dead_ = true;
 }
 
@@ -240,12 +240,12 @@ Continuations Continuation::succs() const {
 }
 
 void Continuation::destroy_filter() {
-    set_filter(world().filter({}));
+    set_filter(world().filter({}, debug()));
 }
 
 /// An all-true filter
 const Filter* Continuation::all_true_filter() const {
-    auto conditions = Array<const Def*>(num_params(), [&](size_t) { return world().literal_bool(true, Debug{}); });
+    auto conditions = Array<const Def*>(num_params(), [&](size_t) { return world().literal_bool(true, debug()); });
     return world().filter(conditions, debug());
 }
 
@@ -332,7 +332,7 @@ void jump_to_dropped_call(Continuation* continuation, Continuation* dropped, con
             nargs.push_back(obody->arg(i));
     }
 
-    continuation->jump(dropped, nargs);
+    continuation->jump(dropped, nargs, continuation->debug());
 }
 
 #if 0

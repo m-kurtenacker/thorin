@@ -1,5 +1,4 @@
 #include "thorin/world.h"
-#include "thorin/analyses/scope.h"
 #include "thorin/transform/rewrite.h"
 
 namespace thorin {
@@ -30,7 +29,7 @@ struct CodegenPrepare : public Rewriter {
                 }
                 return instantiate(app->arg(i));
             });
-            return dst().app(instantiate(app->callee()), new_ops);
+            return dst().app(instantiate(app->callee()), new_ops, app->debug());
         }
         return Rewriter::rewrite(odef);
     }

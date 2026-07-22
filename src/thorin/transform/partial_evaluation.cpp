@@ -79,7 +79,7 @@ public:
     }
 
     const Def* filter(size_t i) {
-        return callee_->filter()->is_empty() ? world().literal_bool(false, {}) : callee_->filter()->condition(i);
+        return callee_->filter()->is_empty() ? world().literal_bool(false, callee_->debug()) : callee_->filter()->condition(i);
     }
 
     bool is_top_level(Continuation* continuation) {

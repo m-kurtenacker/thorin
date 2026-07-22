@@ -1,7 +1,6 @@
 #ifndef THORIN_SPIRV_H
 #define THORIN_SPIRV_H
 
-#include "thorin/analyses/schedule.h"
 #include "thorin/be/codegen.h"
 #include "thorin/be/emitter.h"
 
@@ -76,7 +75,7 @@ protected:
     std::vector<Id> emit_intrinsic(const App& app, const Continuation* intrinsic, BasicBlockBuilder* bb);
     std::vector<Id> emit_args(Defs);
     bool should_emit(const Type*);
-    Id literal(uint32_t);
+    Id literal(uint32_t, Debug);
 
     Id emit_as_bb(Continuation*);
     Id emit_mathop(BasicBlockBuilder* bb, const MathOp& op);

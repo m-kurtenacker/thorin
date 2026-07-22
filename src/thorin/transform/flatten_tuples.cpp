@@ -95,7 +95,7 @@ static Continuation* wrap_def(Def2Def& wrapped, Def2Def& unwrapped, const Def* o
                 Array<const Def*> tuple_args(tuple_type->num_ops());
                 for (size_t k = 0, e = tuple_type->num_ops(); k != e; ++k)
                     tuple_args[k] = new_cont->param(j++);
-                call_args[i + 1] = world.tuple(tuple_args);
+                call_args[i + 1] = world.tuple(tuple_args, old_def->debug());
             } else
                 call_args[i + 1] = new_cont->param(j++);
         } else if (auto fn_type = op->isa<FnType>()) {
@@ -146,7 +146,7 @@ static Continuation* unwrap_def(Def2Def& wrapped, Def2Def& unwrapped, const Def*
         if (auto tuple_type = param->type()->isa<TupleType>()) {
             if (tuple_type->num_ops() <= max_tuple_size) {
                 for (size_t k = 0, e = tuple_type->num_ops(); k != e; ++k)
-                    call_args[j++] = world.extract(param, k);
+                    call_args[j++] = world.extract(param, k, new_def->debug());
             } else
                 call_args[j++] = param;
         } else if (auto fn_type = param->type()->isa<FnType>()) {

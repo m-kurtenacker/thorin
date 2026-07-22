@@ -1,13 +1,9 @@
 #include "thorin/type.h"
 
 #include <algorithm>
-#include <iostream>
-#include <sstream>
-#include <stack>
 
 #include "thorin/transform/rewrite.h"
 #include "thorin/continuation.h"
-#include "thorin/primop.h"
 #include "thorin/world.h"
 
 namespace thorin {
@@ -133,7 +129,7 @@ bool PtrType::equal(const Def* other) const {
 
 TypeTable::TypeTable(World& world)
     : world_(world)
-    , star_     (world.put<Star>((world)))
+    , star_     (world.put<Star>(world, Debug()))
     , unit_     (world.put<TupleType>(world, Defs(), Debug()))
     , fn0_      (world.put<FnType    >(world, Defs(), Node_FnType, Debug()))
     , bottom_ty_(world.put<BottomType>(world, Debug()))

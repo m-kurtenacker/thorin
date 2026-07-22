@@ -3,7 +3,6 @@
 #include "thorin/analyses/verify.h"
 #include "thorin/analyses/scope.h"
 #include "thorin/analyses/free_defs.h"
-#include "thorin/analyses/cfg.h"
 #include "thorin/transform/mangle.h"
 
 namespace thorin {
@@ -154,16 +153,16 @@ public:
             Array<const Def*> wrapper_args(lifted->num_params());
             const Def* new_mem = wrapper->mem_param();
             if (thin_env) {
-                wrapper_args[env_param_index] = world_.cast(free_vars[0]->type(), wrapper->param(env_param_index));
+                wrapper_args[env_param_index] = world_.cast(free_vars[0]->type(), wrapper->param(env_param_index), wrapper->debug());
             } else {
                 // make the wrapper load the pointer and pass each
                 // variable of the environment to the lifted continuation
-                auto env_ptr = world_.cast(Closure::environment_ptr_type(world_), wrapper->param(env_param_index));
-                auto loaded_env = world_.load(wrapper->mem_param(), world_.bitcast(world_.ptr_type(env_type), env_ptr));
-                auto env = world_.extract(loaded_env, 1_u32);
-                new_mem = world_.extract(loaded_env, 0_u32);
+                auto env_ptr = world_.cast(Closure::environment_ptr_type(world_), wrapper->param(env_param_index), wrapper->debug());
+                auto loaded_env = world_.load(wrapper->mem_param(), world_.bitcast(world_.ptr_type(env_type), env_ptr, wrapper->debug()), wrapper->debug());
+                auto env = world_.extract(loaded_env, 1_u32, wrapper->debug());
+                new_mem = world_.extract(loaded_env, 0_u32, wrapper->debug());
                 for (size_t i = 0, e = free_vars.size(); i != e; ++i)
-                    wrapper_args[env_param_index + i] = world_.extract(env, i);
+                    wrapper_args[env_param_index + i] = world_.extract(env, i, wrapper->debug());
             }
             for (size_t i = 0, e = continuation->num_params(); i != e; ++i) {
                 auto param = wrapper->param(i);
@@ -174,10 +173,10 @@ public:
                     wrapper_args[i] = wrapper->param(i);
                 }
             }
-            wrapper->jump(lifted, wrapper_args);
+            wrapper->jump(lifted, wrapper_args, wrapper->debug());
 
             auto closure_type = convert_type(continuation->type());
-            return world_.closure(closure_type->as<ClosureType>(), wrapper, thin_env ? free_vars[0] : world_.tuple(free_vars), continuation->debug());
+            return world_.closure(closure_type->as<ClosureType>(), wrapper, thin_env ? free_vars[0] : world_.tuple(free_vars, continuation->debug()), continuation->debug());
         } else {
             if (new_defs_.count(def)) return new_defs_[def];
             if (def->isa<Param>() || def->isa<Closure>())

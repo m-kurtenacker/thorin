@@ -1,6 +1,5 @@
 #include "thorin/config.h"
 #include "thorin/world.h"
-#include "thorin/analyses/cfg.h"
 #include "thorin/analyses/scope.h"
 #include "thorin/analyses/verify.h"
 #include "thorin/transform/importer.h"
@@ -88,7 +87,7 @@ void Cleaner::eliminate_tail_rec() {
                 world().DLOG("tail recursive: {}", entry);
                 auto dropped = drop(scope, args);
 
-                entry->jump(dropped, new_args);
+                entry->jump(dropped, new_args, entry->debug());
                 todo_ = true;
                 scope.update();
             }

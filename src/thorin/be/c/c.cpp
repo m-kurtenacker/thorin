@@ -2,8 +2,6 @@
 #include "thorin/primop.h"
 #include "thorin/type.h"
 #include "thorin/world.h"
-#include "thorin/analyses/cfg.h"
-#include "thorin/analyses/schedule.h"
 #include "thorin/analyses/scope.h"
 #include "thorin/transform/hls_channels.h"
 #include "thorin/be/emitter.h"
@@ -16,7 +14,6 @@
 #include <sstream>
 #include <type_traits>
 #include <unordered_map> // TODO don't use std::unordered_*
-#include <variant>
 
 namespace thorin::c {
 
@@ -1127,7 +1124,7 @@ std::string CCodeGen::emit_def(BB* bb, const Def* def) {
             for (size_t i = 0, n = def->num_ops(); i < n; ++i) {
                 auto op = emit_unsafe(def->op(i));
                 bb->body << name;
-                emit_access(bb->body, def->type(), world().literal(thorin::pu64{i}));
+                emit_access(bb->body, def->type(), world().literal(thorin::pu64{i}, def->debug()));
                 bb->body.fmt(" = {};\n", op);
             }
             return name;
@@ -1207,7 +1204,7 @@ std::string CCodeGen::emit_def(BB* bb, const Def* def) {
                 if (auto value = emit_constant(variant->value()); !value.empty()) // TODO what exactly does the value.empty() case represent and why do we emit bottom instead ?
                     s.fmt("{{ {{ {} }}, ", value);
                 else
-                    s.fmt("{{ {{ {} }}, ", emit_constant(world().bottom(variant->value()->type())));
+                    s.fmt("{{ {{ {} }}, ", emit_constant(world().bottom(variant->value()->type(), variant->debug())));
             }
             s.fmt("{} }}", variant->index());
         }

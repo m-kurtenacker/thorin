@@ -53,11 +53,11 @@ void lift_pipeline(World& world) {
             auto new_pipeline = world.continuation(pipe_type, Intrinsic::Pipeline, callee->debug());
             auto old_body = body->arg(4);
             auto body_cont = world.continuation(body_type, old_body->debug());
-            cont->jump(new_pipeline, thorin::Defs { body->arg(0), body->arg(1), body->arg(2), body->arg(3), body_cont, body->arg(5), pipeline_continue });
+            cont->jump(new_pipeline, thorin::Defs { body->arg(0), body->arg(1), body->arg(2), body->arg(3), body_cont, body->arg(5), pipeline_continue }, cont->debug());
             auto target = drop(old_body, {body_cont->param(0), body_cont->param(1), continue_wrapper});
             assert(target->has_body());
-            continue_wrapper->jump(pipeline_continue, thorin::Defs { continue_wrapper->param(0), body->arg(5) });
-            body_cont->jump(target->body()->callee(), target->body()->args());
+            continue_wrapper->jump(pipeline_continue, thorin::Defs { continue_wrapper->param(0), body->arg(5) }, cont->debug());
+            body_cont->jump(target->body()->callee(), target->body()->args(), cont->debug());
         }
     }
 

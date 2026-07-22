@@ -157,16 +157,16 @@ void Runtime::emit_host_code(CodeGen& code_gen, llvm::IRBuilder<>& builder, Plat
     const auto get_u32 = [&](const Def* def) { return builder.CreateSExt(code_gen.emit(def), builder.getInt32Ty()); };
 
     llvm::Value* grid_array  = llvm::UndefValue::get(llvm::ArrayType::get(builder.getInt32Ty(), 3));
-    grid_array = builder.CreateInsertValue(grid_array, get_u32(world.extract(it_space, 0_u32)), 0);
-    grid_array = builder.CreateInsertValue(grid_array, get_u32(world.extract(it_space, 1_u32)), 1);
-    grid_array = builder.CreateInsertValue(grid_array, get_u32(world.extract(it_space, 2_u32)), 2);
+    grid_array = builder.CreateInsertValue(grid_array, get_u32(world.extract(it_space, 0_u32, continuation->debug())), 0);
+    grid_array = builder.CreateInsertValue(grid_array, get_u32(world.extract(it_space, 1_u32, continuation->debug())), 1);
+    grid_array = builder.CreateInsertValue(grid_array, get_u32(world.extract(it_space, 2_u32, continuation->debug())), 2);
     llvm::Value* grid_size = code_gen.emit_alloca(builder, grid_array->getType(), "");
     builder.CreateStore(grid_array, grid_size);
 
     llvm::Value* block_array = llvm::UndefValue::get(llvm::ArrayType::get(builder.getInt32Ty(), 3));
-    block_array = builder.CreateInsertValue(block_array, get_u32(world.extract(it_config, 0_u32)), 0);
-    block_array = builder.CreateInsertValue(block_array, get_u32(world.extract(it_config, 1_u32)), 1);
-    block_array = builder.CreateInsertValue(block_array, get_u32(world.extract(it_config, 2_u32)), 2);
+    block_array = builder.CreateInsertValue(block_array, get_u32(world.extract(it_config, 0_u32, continuation->debug())), 0);
+    block_array = builder.CreateInsertValue(block_array, get_u32(world.extract(it_config, 1_u32, continuation->debug())), 1);
+    block_array = builder.CreateInsertValue(block_array, get_u32(world.extract(it_config, 2_u32, continuation->debug())), 2);
     llvm::Value* block_size = code_gen.emit_alloca(builder, block_array->getType(), "");
     builder.CreateStore(block_array, block_size);
 

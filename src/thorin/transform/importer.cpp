@@ -13,7 +13,7 @@ const Def* Importer::rewrite(const Def* const odef) {
                 auto imported_mem = import(memop->mem());
                 auto imported_ty = import(memop->out(1)->type())->as<Type>();
                 todo_ = true;
-                return(dst().tuple({ imported_mem, dst().bottom(imported_ty) }));
+                return(dst().tuple({ imported_mem, dst().bottom(imported_ty, odef->debug()) }, odef->debug()));
             }
         }
     } else if (auto app = odef->isa<App>()) {
@@ -105,7 +105,7 @@ const Def* Importer::rewrite(const Def* const odef) {
                 if (has_calls) {
                     auto rebuilt = cont->stub(*this, instantiate(cont->type())->as<Type>());
                     src().VLOG("simplify: continuation {} calls a free def: {} (with permuted args), introducing a wrapper: {}", cont->unique_name(), body->callee(), rebuilt);
-                    auto wrapped = dst().run(rebuilt);
+                    auto wrapped = dst().run(rebuilt, odef->debug());
                     insert(odef, wrapped);
 
                     rebuilt->set_body(instantiate(body)->as<App>());

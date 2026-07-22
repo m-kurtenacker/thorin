@@ -1,5 +1,4 @@
 #include "thorin/transform/hls_kernel_launch.h"
-#include "thorin/transform/mangle.h"
 #include "thorin/world.h"
 #include "thorin/continuation.h"
 #include "thorin/analyses/scope.h"
@@ -120,9 +119,9 @@ void hls_kernel_launch(World& world, DeviceParams& device_params) {
                         else if (param->type()->isa<TupleType>()) {
                             // Block and grid fixed on 'one'
                             for (size_t j = 0; j < opencl_tuples_elems.size(); ++j) {
-                                opencl_tuples_elems[j] = world.one(world.type_qs32());
+                                opencl_tuples_elems[j] = world.one(world.type_qs32(), opencl->debug());
                             }
-                            opencl_args[i] = world.tuple(opencl_tuples_elems);
+                            opencl_args[i] = world.tuple(opencl_tuples_elems, opencl->debug());
                         } else if (param->index() == 4 ) {
                             if (param->type() == opencl_args[4]->type())
                                 // pointer to function is assigned where hls_top is created
@@ -156,9 +155,9 @@ void hls_kernel_launch(World& world, DeviceParams& device_params) {
                 // jump over all hls basic blocks until the last one
                 // Replace the last one with the specialized basic block with Opencl intrinsic
                 if (block != last_hls_cont)
-                    block->jump(callee_continuation, args);
+                    block->jump(callee_continuation, args, block->debug());
                 else
-                    block->jump(opencl, opencl_args);
+                    block->jump(opencl, opencl_args, block->debug());
             }
         }
     });

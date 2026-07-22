@@ -248,10 +248,10 @@ DeviceParams hls_channels(Thorin& thorin, Importer& importer, Top2Kernel& top2ke
 
     // --------------------------------------------------------------------
 
-    auto enter   = world.enter(hls_top->mem_param());
-    auto cur_mem = world.extract(enter, 0_s);
+    auto enter   = world.enter(hls_top->mem_param(), hls_top->debug());
+    auto cur_mem = world.extract(enter, 0_s, hls_top->debug());
     // hls_top memory obj frame to be used in making channel slots
-    auto frame   = world.extract(enter, 1_s);
+    auto frame   = world.extract(enter, 1_s, hls_top->debug());
 
     Def2Def global2slot;
     std::vector<const Def*> channel_slots;
@@ -265,7 +265,7 @@ DeviceParams hls_channels(Thorin& thorin, Importer& importer, Top2Kernel& top2ke
     // We need to iterate over globals twice because we cannot iterate over primops while creating new primops
     for (auto global : globals) {
         if (is_channel_type(global->type())) {
-            channel_slots.emplace_back(world.slot(global->type()->as<PtrType>()->pointee(), frame));
+            channel_slots.emplace_back(world.slot(global->type()->as<PtrType>()->pointee(), frame, global->debug()));
             global2slot.emplace(global, channel_slots.back());
         }
 
@@ -357,7 +357,7 @@ DeviceParams hls_channels(Thorin& thorin, Importer& importer, Top2Kernel& top2ke
             }
         }
 
-        cur_bb->jump(kernel, args);
+        cur_bb->jump(kernel, args, cur_bb->debug());
         if (!last_kernel) {
             auto next = ret->as_nom<Continuation>();
             cur_bb = next;
