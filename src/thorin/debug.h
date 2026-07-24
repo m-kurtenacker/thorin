@@ -81,6 +81,8 @@ public:
 #endif
     Loc loc;
     const Def* meta = nullptr;
+
+    Stream& stream(Stream& s) const;
 };
 
 }

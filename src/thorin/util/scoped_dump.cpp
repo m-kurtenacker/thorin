@@ -16,6 +16,12 @@ void ScopedWorld::stream_cont(thorin::Stream& s, Continuation* cont) const {
         default: s.fmt("cc(?)"); break;
     }
 
+    if (config_.debug_locations) {
+        s.fmt(Magenta);
+        s << cont->debug() << " ";
+        s.fmt(Reset);
+    }
+
     s.fmt(Green);
     s.fmt("cont ");
     s.fmt(Reset);
@@ -119,6 +125,12 @@ bool ScopedWorld::print_inline(const thorin::Def* def) const {
 }
 
 void ScopedWorld::stream_def(thorin::Stream& s, const thorin::Def* def) const {
+    if (config_.debug_locations) {
+        s.fmt(Magenta);
+        s << def->debug() << " ";
+        s.fmt(Reset);
+    }
+
     if (auto app = def->isa<App>()) {
         stream_op(s, app->callee());
         stream_ops(s, app->args());
@@ -168,13 +180,13 @@ Stream& ScopedWorld::stream(thorin::Stream& s) const {
     return s;
 }
 
-void World::dump_scoped(bool use_color) const {
-    ScopedWorld s(*const_cast<World*>(this), ScopedWorld::Config { use_color });
+void World::dump_scoped(bool use_color, bool debug_locations) const {
+    ScopedWorld s(*const_cast<World*>(this), ScopedWorld::Config { use_color, debug_locations });
     s.dump();
 }
 
 void World::dump_scoped_to_disk() const {
-    ScopedWorld s(*const_cast<World*>(this), ScopedWorld::Config { false });
+    ScopedWorld s(*const_cast<World*>(this), ScopedWorld::Config { false, false });
     auto name = this->name() + ".dump";
     std::ofstream file(name);
     Stream st(file);

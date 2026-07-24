@@ -18,6 +18,7 @@ C(Reset, "\u001b[0m")  \
 struct ScopedWorld : public Streamable<ScopedWorld> {
     struct Config {
         bool use_color;
+        bool debug_locations;
     };
 
     ScopedWorld(World& w, Config cfg = { true }) : world_(w), forest_(w), config_(cfg) {

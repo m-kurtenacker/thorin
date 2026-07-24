@@ -45,4 +45,10 @@ Debug::Debug(const Def* dbg)
 {}
 #endif
 
+Stream& Debug::stream(Stream& s) const {
+    s << name << "(" << loc << ")";
+
+    return s;
+}
+
 }
