@@ -1313,7 +1313,7 @@ void Thorin::opt() {
     world().VLOG("running pass {}", #pass);  \
     pass;                                    \
     debug_verify(world());                   \
-    if (debug_passes) world().dump_scoped(); \
+    if (debug_passes) world().dump_scoped(true, true); \
 }
 
     RUN_PASS(cleanup())

@@ -580,6 +580,8 @@ std::string CCodeGen::prepare(const Scope& scope) {
         }
     }
 
+    emit_debug_info(func_impls_, cont);
+
     func_impls_.fmt("{} {{", emit_fun_head(cont));
     func_impls_.fmt("\t\n");
 
@@ -660,9 +662,12 @@ void CCodeGen::prepare(Continuation* cont, const std::string&) {
             // code generator will emit two assignments to the phis nodes, but the second one
             // depends on the current value of the phi node.
             // Lookup "lost copy problem" and "swap problem" in literature for SSA destruction for more information.
+            emit_debug_info(func_impls_, param);
             func_impls_.fmt("{}   {};\n", convert(param->type()), param->unique_name());
+            emit_debug_info(func_impls_, param);
             func_impls_.fmt("{} p_{};\n", convert(param->type()), param->unique_name());
-            bb.head.fmt("{} = p_{};\n", param->unique_name(), param->unique_name());
+            emit_debug_info(bb.head, param); //TODO: I have seen these being undefined.
+            bb.head.fmt("{} = p_{}; // TODO\n", param->unique_name(), param->unique_name());
             defs_[param] = param->unique_name();
         }
     }
@@ -706,9 +711,8 @@ void CCodeGen::emit_epilogue(Continuation* cont) {
     auto&& bb = cont2bb_[cont];
     assert(cont->has_body());
     auto body = cont->body();
-    if (body->num_args() > 0) {
-        emit_debug_info(bb.tail, body->arg(0));
-    }
+
+    emit_debug_info(bb.tail, body);
 
     if ((lang_ == Lang::OpenCL || (lang_ == Lang::HLS && hls_top_scope)) && (cont->is_exported()))
         emit_fun_decl(cont);
@@ -896,6 +900,7 @@ void CCodeGen::emit_epilogue(Continuation* cont) {
 
         // Pass the result to the phi nodes of the return continuation
         if (!is_type_unit(ret_type)) {
+            emit_debug_info(bb.tail, body);
             size_t i = 0;
             for (auto param : ret_cont->params()) {
                 if (!is_concrete(param))
@@ -1360,6 +1365,7 @@ std::string CCodeGen::emit_def(BB* bb, const Def* def) {
     if (bb) {
         func_impls_.fmt("{} {};\n", convert(emitted_type), name);
         func_defs_.insert(def);
+        emit_debug_info(bb->body, def);
         bb->body.fmt("{} = {};\n", name, s.str());
         return name;
     } else

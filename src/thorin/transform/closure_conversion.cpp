@@ -68,7 +68,7 @@ public:
         auto callee = body->callee()->isa_nom<Continuation>();
 
         if (callee == source) {
-            target->jump(callee, body->args(), source->debug());
+            target->jump(callee, body->args(), body->debug());
             return;
         }
 
@@ -77,7 +77,7 @@ public:
             Array<const Def*> new_args(body->num_args());
             for (size_t i = 0, e = body->num_args(); i != e; ++i)
                 new_args[i] = convert_def(body->arg(i));
-            target->jump(convert_def(body->callee(), true), new_args, source->debug());
+            target->jump(convert_def(body->callee(), true), new_args, body->debug());
         } else {
             Array<const Def*> new_args(body->num_args());
             for (size_t i = 0, e = body->num_args(); i != e; ++i) {
