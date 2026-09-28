@@ -535,6 +535,12 @@ void CCodeGen::emit_module() {
             stream_.fmt("__device__ inline int blockDim_{}() {{ return blockDim.{}; }}\n", x, x);
             stream_.fmt("__device__ inline int gridDim_{}() {{ return gridDim.{}; }}\n", x, x);
         }
+
+        stream_.fmt("\
+__device__ cudaError_t cudaLaunchDevice(void *func, void *parameterBuffer,\n\
+                                        dim3 gridDimension, dim3 blockDimension,\n\
+                                        unsigned int sharedMemSize,\n\
+                                        cudaStream_t stream);\n");
     }
 
     stream_.endl() << func_impls_.str();
@@ -825,6 +831,29 @@ void CCodeGen::emit_epilogue(Continuation* cont) {
         } else if (callee->intrinsic() == Intrinsic::PipelineContinue) {
             emit_unsafe(body->arg(0));
             bb.tail.fmt("goto {};", label_name(callee));
+        } else if (callee->intrinsic() == Intrinsic::CUDA || callee->intrinsic() == Intrinsic::CUDA_LAUNCH_DEVICE) {
+            emit_unsafe(body->arg(0));
+            //auto dev = body->arg(1); //This must be present for get_gpu_kernel_config.
+            auto grid = body->arg(2)->as<Tuple>();
+            auto block = body->arg(3)->as<Tuple>();
+            auto kernel = body->arg(4)->as<Global>()->init();
+            auto ret_cont = body->arg(5);
+
+            assert(kernel);
+            auto kernel_name = kernel->name();
+
+            func_decls_.fmt("{};\n", emit_fun_head(kernel->as_nom<Continuation>(), true));
+
+            bb.tail.fmt("cudaLaunchDevice((void*) &{}, NULL, {{{}, {}, {}}}, {{{}, {}, {}}}, 0, 0);\n", kernel_name,
+                        grid->op(0)->as<PrimLit>()->qu32_value().data(),
+                        grid->op(1)->as<PrimLit>()->qu32_value().data(),
+                        grid->op(2)->as<PrimLit>()->qu32_value().data(),
+                        block->op(0)->as<PrimLit>()->qu32_value().data(),
+                        block->op(1)->as<PrimLit>()->qu32_value().data(),
+                        block->op(2)->as<PrimLit>()->qu32_value().data()
+                        );
+
+            bb.tail.fmt("goto {};", label_name(ret_cont));
         } else {
             THORIN_UNREACHABLE;
         }
