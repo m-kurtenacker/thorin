@@ -536,11 +536,12 @@ void CCodeGen::emit_module() {
             stream_.fmt("__device__ inline int gridDim_{}() {{ return gridDim.{}; }}\n", x, x);
         }
 
-        stream_.fmt("\
+        stream_.fmt("\n\
 __device__ cudaError_t cudaLaunchDevice(void *func, void *parameterBuffer,\n\
                                         dim3 gridDimension, dim3 blockDimension,\n\
                                         unsigned int sharedMemSize,\n\
-                                        cudaStream_t stream);\n");
+                                        cudaStream_t stream);\n\
+__device__ void *cudaGetParameterBuffer(size_t alignment, size_t size);\n");
     }
 
     stream_.endl() << func_impls_.str();
@@ -839,12 +840,56 @@ void CCodeGen::emit_epilogue(Continuation* cont) {
             auto kernel = body->arg(4)->as<Global>()->init();
             auto ret_cont = body->arg(5);
 
+            //Build a chain of sizeof and offsetof operations to match the parameter buffer layout.
+            //TODO: There has to be an easier way to do this. The CUDA compiler should collapse this to constants, but this still smells something fierce.
+            std::vector<std::string> args;
+            std::vector<std::string> types;
+            std::vector<std::string> offsets;
+            std::string last_size = "0";
+            std::string last_type = "";
+
+            for (size_t i = 6; i < body->num_args(); i++) {
+                auto arg = body->arg(i);
+                if (arg == ret_cont) continue;
+                if (auto emitted_arg = emit_unsafe(arg); !emitted_arg.empty()) {
+                    args.emplace_back(emitted_arg);
+                    auto arg_type = convert(arg->type());
+                    types.emplace_back(arg_type);
+
+                    if (last_type != "" && last_type != arg_type) {
+                        //Make sure we are aligned to the new type.
+                        auto myalignof = "alignof(" + arg_type + ")";
+                        last_size = "(" + last_size + " + (" + myalignof + " - 1) / " + myalignof + " * " + myalignof;
+                    }
+
+                    offsets.emplace_back(last_size);
+                    if (last_type != "")
+                        last_size += " + sizeof(" + arg_type + ")";
+                    else
+                        last_size = "sizeof(" + arg_type + ")";
+
+                    last_type = arg_type;
+                }
+            }
+
+            std::string param_buffer = "NULL";
+
+            if (body->num_args() > 6) {
+                param_buffer = "param_" + std::to_string(callee->gid());
+                //TODO: Right now, we can pass 64 for alignment, which is the default anyways. "However, it is recommended to pass the correct alignment requirement value - which is the largest alignment of any parameter to be placed in the parameter buffer - to cudaGetParameterBuffer() to ensure portability in the future."
+                bb.tail.fmt("char * {} = (char*) cudaGetParameterBuffer(64, {});\n", param_buffer, last_size);
+                for (size_t i = 0; i < args.size(); i++) {
+                    bb.tail.fmt("* (({}*) (&{}[{}])) = {};\n", types[i], param_buffer, offsets[i], args[i]);
+                }
+            }
+
             assert(kernel);
             auto kernel_name = kernel->name();
 
             func_decls_.fmt("{};\n", emit_fun_head(kernel->as_nom<Continuation>(), true));
 
-            bb.tail.fmt("cudaLaunchDevice((void*) &{}, NULL, {{{}, {}, {}}}, {{{}, {}, {}}}, 0, 0);\n", kernel_name,
+            bb.tail.fmt("cudaLaunchDevice((void*) &{}, {}, {{{}, {}, {}}}, {{{}, {}, {}}}, 0, 0);\n", kernel_name,
+                        param_buffer,
                         grid->op(0)->as<PrimLit>()->qu32_value().data(),
                         grid->op(1)->as<PrimLit>()->qu32_value().data(),
                         grid->op(2)->as<PrimLit>()->qu32_value().data(),
