@@ -1066,11 +1066,28 @@ void CCodeGen::emit_access(Stream& s, const Type* agg_type, const Def* index, co
     } else if (agg_type->isa<VectorType>()) {
         std::ostringstream os;
         // OpenCL indices must be in hex format
-        if (index->isa<PrimLit>())
-            os << std::hex << primlit_value<size_t>(index);
-        else
-            world().edef(index, "only constants are supported as vector component indices");
-        s.fmt("{}s{}", prefix, os.str());
+        if (lang_ == Lang::CUDA) {
+            if (index->isa<PrimLit>()) {
+                if (primlit_value<size_t>(index) == 0)
+                    os << "x";
+                else if (primlit_value<size_t>(index) == 1)
+                    os << "y";
+                else if (primlit_value<size_t>(index) == 2)
+                    os << "z";
+                else if (primlit_value<size_t>(index) == 3)
+                    os << "w";
+                else
+                    world().edef(index, "only up to vec4 supported.");
+            } else
+                world().edef(index, "only constants are supported as vector component indices");
+            s.fmt("{}{}", prefix, os.str());
+        } else {
+            if (index->isa<PrimLit>())
+                os << std::hex << primlit_value<size_t>(index);
+            else
+                world().edef(index, "only constants are supported as vector component indices");
+            s.fmt("{}s{}", prefix, os.str());
+        }
     } else {
         THORIN_UNREACHABLE;
     }
