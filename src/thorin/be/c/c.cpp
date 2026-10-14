@@ -859,7 +859,7 @@ void CCodeGen::emit_epilogue(Continuation* cont) {
                     if (last_type != "" && last_type != arg_type) {
                         //Make sure we are aligned to the new type.
                         auto myalignof = "alignof(" + arg_type + ")";
-                        last_size = "(" + last_size + " + (" + myalignof + " - 1) / " + myalignof + " * " + myalignof;
+                        last_size = "(" + last_size + " + " + myalignof + " - 1) / " + myalignof + " * " + myalignof;
                     }
 
                     offsets.emplace_back(last_size);
@@ -888,15 +888,35 @@ void CCodeGen::emit_epilogue(Continuation* cont) {
 
             func_decls_.fmt("{};\n", emit_fun_head(kernel->as_nom<Continuation>(), true));
 
-            bb.tail.fmt("cudaLaunchDevice((void*) &{}, {}, {{{}, {}, {}}}, {{{}, {}, {}}}, 0, 0);\n", kernel_name,
-                        param_buffer,
-                        grid->op(0)->as<PrimLit>()->qu32_value().data(),
-                        grid->op(1)->as<PrimLit>()->qu32_value().data(),
-                        grid->op(2)->as<PrimLit>()->qu32_value().data(),
-                        block->op(0)->as<PrimLit>()->qu32_value().data(),
-                        block->op(1)->as<PrimLit>()->qu32_value().data(),
-                        block->op(2)->as<PrimLit>()->qu32_value().data()
-                        );
+            bb.tail.fmt("cudaLaunchDevice((void*) &{}, {}, {{", kernel_name, param_buffer);
+
+            for (int i = 0; i < 3; i++) {
+                if (i != 0)
+                    bb.tail.fmt(", ");
+                if (auto primlit = grid->op(i)->isa<PrimLit>()) {
+                    bb.tail.fmt("{} / ", primlit_value<unsigned int>(primlit));
+                } else {
+                    bb.tail.fmt("(unsigned int) {} / ", emit(grid->op(i)));
+                }
+                if (auto primlit = block->op(i)->isa<PrimLit>()) {
+                    bb.tail.fmt("{}", primlit_value<unsigned int>(primlit));
+                } else {
+                    bb.tail.fmt("{}", emit(block->op(i)));
+                }
+            }
+
+            bb.tail.fmt("}}, {{");
+
+            for (int i = 0; i < 3; i++) {
+                if (i != 0)
+                    bb.tail.fmt(", ");
+                if (auto primlit = block->op(i)->isa<PrimLit>()) {
+                    bb.tail.fmt("{}", primlit_value<unsigned int>(primlit));
+                } else {
+                    bb.tail.fmt("(unsigned int) {}", emit(block->op(i)));
+                }
+            }
+            bb.tail.fmt("}}, 0, 0);\n");
 
             bb.tail.fmt("goto {};", label_name(ret_cont));
         } else {
