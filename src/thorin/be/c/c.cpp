@@ -429,12 +429,14 @@ void CCodeGen::emit_module() {
         if (scope.entry()->name() == "hls_top")
             hls_top = scope.entry();
         else if (scope.entry()->cc() != CC::Thorin && scope.entry()->is_returning())
-            emit_scope(scope, forest_);
+            queue_scope(scope.entry());
     });
     if (hls_top) {
         hls_top_scope = true;
-        emit_scope(Scope(hls_top), forest_);
+        queue_scope(hls_top);
     }
+
+    emit_scopes(forest_);
 
     if (lang_ == Lang::OpenCL) {
         if (use_channels_) {
@@ -829,6 +831,9 @@ void CCodeGen::emit_epilogue(Continuation* cont) {
             THORIN_UNREACHABLE;
         }
     } else if (auto callee = body->callee()->isa_nom<Continuation>()) { // function/closure call
+        if (callee->has_body())
+            queue_scope(callee); // Make sure the function body is being emitted as well.
+
         auto ret_cont = (*std::find_if(body->args().begin(), body->args().end(), [] (const Def* arg) {
             return arg->isa_nom<Continuation>();
         }))->as_nom<Continuation>();

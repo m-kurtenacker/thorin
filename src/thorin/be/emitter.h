@@ -74,6 +74,19 @@ protected:
         return defs_[def] = val;
     }
 
+    void queue_scope(Continuation* entry) {
+        if (entry->body())
+            scopes_to_emit_.push(entry);
+    }
+
+    void emit_scopes(ScopesForest& forest) {
+        while (!scopes_to_emit_.empty()) {
+            auto entry = scopes_to_emit_.pop();
+            Scope& scope = forest.get_scope(entry);
+            emit_scope(scope, forest);
+        }
+    }
+
     void emit_scope(const Scope& scope, ScopesForest& forest) {
         scope_ = &scope;
         auto conts = schedule(scope);
@@ -105,6 +118,8 @@ protected:
     DefMap<Value> defs_;
     DefMap<Type> types_;
     ContinuationMap<BB> cont2bb_;
+    unique_queue<ContinuationSet> scopes_to_emit_;
+    DefSet emitted_scopes_;
     Continuation* entry_ = nullptr;
     const Scope* scope_ = nullptr;
 };
